@@ -1,68 +1,73 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WeatherScope - Location Tracker</title>
+  <title>WeatherScope - Local Weather & Admin Tools</title>
   <style>
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #74b9ff, #0984e3);
-      color: #fff;
-      text-align: center;
+      background: linear-gradient(to bottom, #74b9ff, #dfe6e9);
+      color: #2d3436;
     }
     header {
-      padding: 2rem 1rem;
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(6px);
+      background-color: #0984e3;
+      color: white;
+      padding: 2rem;
       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      text-align: center;
     }
     header h1 {
       margin: 0;
       font-size: 2.5rem;
-      color: #fff;
+    }
+    #weatherBox {
+      margin: 2rem auto;
+      padding: 2rem;
+      background: white;
+      max-width: 500px;
+      border-radius: 12px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+      text-align: center;
     }
     #map {
-      height: 400px;
+      height: 300px;
       width: 100%;
-      margin-top: 20px;
+      max-width: 500px;
+      margin: 2rem auto;
       border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    #locationStatus {
-      font-size: 1.2rem;
-      margin: 1rem;
     }
     #adminPanel {
       display: none;
-      background: rgba(255,255,255,0.1);
+      background: white;
+      padding: 2rem;
       margin: 2rem auto;
-      padding: 1.5rem;
-      border-radius: 15px;
-      max-width: 800px;
-      text-align: left;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      max-width: 700px;
     }
-    #adminPanel h2 { color: #fff; }
-    #adminPanel button {
-      background: #fff;
+    #adminPanel h2 {
       color: #0984e3;
+    }
+    #adminPanel button {
+      background-color: #0984e3;
+      color: white;
       border: none;
       padding: 10px 16px;
       margin: 5px;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
     }
     #rawDataDisplay {
       white-space: pre-wrap;
-      background: #333;
-      color: #0f0;
+      background: #ecf0f1;
       padding: 1rem;
-      margin-top: 1rem;
       border-radius: 10px;
-      max-height: 300px;
+      margin-top: 1rem;
+      max-height: 200px;
       overflow-y: auto;
+      font-size: 14px;
     }
     #loginModal {
       display: none;
@@ -95,22 +100,27 @@
 </head>
 <body>
   <header>
-    <h1>🌐 WeatherScope</h1>
-    <p id="locationStatus">Attempting to get your location...</p>
+    <h1>⛅ WeatherScope</h1>
+    <p>Your local weather with ai enhancement</p>
   </header>
+
+  <div id="weatherBox">
+    <h2 id="location">Detecting location...</h2>
+    <p><strong>Temperature:</strong> <span id="temp">--°C</span></p>
+    <p><strong>Condition:</strong> <span id="condition">Loading...</span></p>
+  </div>
+
   <div id="map"></div>
 
-  <!-- Admin Panel -->
   <div id="adminPanel">
-    <h2>🔒 Admin Panel</h2>
-    <p>Total Records: <span id="locationCount">0</span></p>
+    <h2>🔐 Admin Panel</h2>
+    <p>Total Location Records: <span id="locationCount">0</span></p>
     <button onclick="exportData()">📥 Export CSV</button>
     <button onclick="viewRawData()">👁️ View Raw Data</button>
-    <button onclick="clearAllData()">🗑️ Clear All Data</button>
+    <button onclick="clearAllData()">🗑️ Clear All</button>
     <div id="rawDataDisplay" style="display:none;"></div>
   </div>
 
-  <!-- Login Modal -->
   <div id="loginModal">
     <div class="login-box">
       <h3>Admin Login</h3>
@@ -122,51 +132,50 @@
   </div>
 
   <script>
-    let map;
-    let marker;
+    let map, marker;
 
     window.onload = function () {
       checkAdminAccess();
-      initMap();
-      getLocation();
+      fetch("https://ipapi.co/json/")
+        .then(res => res.json())
+        .then(data => {
+          const lat = parseFloat(data.latitude);
+          const lon = parseFloat(data.longitude);
+          const city = data.city + ", " + data.region;
+          document.getElementById("location").innerText = city;
+          initMap(lat, lon);
+          saveLocation(lat, lon);
+          fetchWeather(lat, lon);
+        })
+        .catch(() => {
+          document.getElementById("location").innerText = "Location unavailable";
+        });
     };
 
-    function initMap(lat = 0, lng = 0) {
+    function initMap(lat, lng) {
       const pos = { lat, lng };
       map = new google.maps.Map(document.getElementById("map"), {
         center: pos,
-        zoom: lat === 0 ? 2 : 14
+        zoom: 12
       });
-
-      if (lat !== 0 && lng !== 0) {
-        marker = new google.maps.Marker({
-          position: pos,
-          map,
-          title: "You are here"
-        });
-      }
+      marker = new google.maps.Marker({
+        position: pos,
+        map: map,
+        title: "Your Location"
+      });
     }
 
-    function getLocation() {
-      const status = document.getElementById("locationStatus");
-      if (!navigator.geolocation) {
-        status.textContent = "Geolocation not supported.";
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          status.textContent = `📍 Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-          initMap(lat, lng);
-          saveLocation(lat, lng);
-        },
-        () => {
-          status.textContent = "Unable to retrieve location.";
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
+    function fetchWeather(lat, lon) {
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById("temp").innerText = data.current_weather.temperature + "°C";
+          const codes = ["Clear", "Mainly Clear", "Partly Cloudy", "Overcast"];
+          document.getElementById("condition").innerText = codes[data.current_weather.weathercode] || "Cloudy";
+        })
+        .catch(() => {
+          document.getElementById("condition").innerText = "Unable to fetch weather";
+        });
     }
 
     function saveLocation(lat, lng) {
@@ -203,7 +212,7 @@
         document.getElementById("adminPanel").style.display = "block";
         updateLocationCount();
       } else {
-        alert("Wrong login");
+        alert("Invalid credentials");
       }
     }
 
@@ -241,7 +250,7 @@
       }
     }
   </script>
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AlzaSyB_Wf43YltG5wLQ9uPXtjhGc7bfAa9B09w
-"></script>
+
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AlzaSyB_Wf43YltG5wLQ9uPXtjhGc7bfAa9B09w"></script>
 </body>
 </html>
