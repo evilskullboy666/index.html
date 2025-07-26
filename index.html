@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>My Location Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      #map {
+        height: 100vh;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>My Location Tracker (Personal Use)</h2>
+    <div id="map"></div>
+
+    <script>
+      function initMap() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const myLatLng = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              };
+
+              const map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 15,
+                center: myLatLng,
+              });
+
+              new google.maps.Marker({
+                position: myLatLng,
+                map: map,
+                title: "You are here!",
+              });
+
+              console.log("Your location:", myLatLng);
+            },
+            () => {
+              alert("Geolocation permission denied.");
+            }
+          );
+        } else {
+          alert("Geolocation not supported.");
+        }
+      }
+    </script>
+
+    <script async
+      defer
+      src="https://maps.googleapis.com/maps/api/js?key=AlzaSyB_Wf43YltG5wLQ9uPXtjhGc7bfAa9B09w
+&callback=initMap">
+    </script>
+  </body>
+</html>
