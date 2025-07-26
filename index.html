@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,49 +70,6 @@
       border-top: 1px solid #333;
     }
 
-    #loginModal {
-      display: none;
-      justify-content: center;
-      align-items: center;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0,0,0,0.8);
-      z-index: 9999;
-    }
-
-    #loginModal > div {
-      background: #1f2933;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      width: 300px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.5);
-    }
-
-    #loginModal input {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 12px;
-      border: none;
-      border-radius: 5px;
-    }
-
-    #adminPanel {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #1e293b;
-      padding: 20px;
-      border-radius: 10px;
-      z-index: 1000;
-      color: #fff;
-      max-width: 400px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.6);
-      display: none;
-    }
-
     footer {
       text-align: center;
       padding: 20px;
@@ -124,18 +82,6 @@
     pre {
       white-space: pre-wrap;
       word-wrap: break-word;
-    }
-
-    #debugLog {
-      background: #222;
-      color: #ccc;
-      font-size: 12px;
-      padding: 10px;
-      margin: 15px;
-      border-radius: 5px;
-      max-width: 500px;
-      word-wrap: break-word;
-      font-family: monospace;
     }
   </style>
 </head>
@@ -151,26 +97,23 @@
     <button onclick="detectLocation()">📍 Use My Location</button>
     <div id="weatherResult" style="display: none;"></div>
     <div id="map"></div>
-    <div id="debugLog"></div>
   </div>
 
   <!-- Hidden Admin Login Modal -->
-  <div id="loginModal">
-    <div>
+  <div id="loginModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 9999;">
+    <div style="background: #1f2933; padding: 30px; border-radius: 10px; text-align: center; width: 300px;">
       <h3>🔐 Admin Login</h3>
-      <input type="text" id="adminUser" placeholder="Username"><br>
-      <input type="password" id="adminPass" placeholder="Password"><br>
+      <input type="text" id="adminUser" placeholder="Username" style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+      <input type="password" id="adminPass" placeholder="Password" style="width: 100%; padding: 8px; margin-bottom: 15px;"><br>
       <button onclick="loginAdmin()">Login</button>
       <p id="loginError" style="color: red; font-size: 12px; display: none;">Invalid credentials</p>
     </div>
   </div>
 
   <!-- Admin Panel -->
-  <div id="adminPanel">
+  <div id="adminPanel" style="display: none; position: fixed; top: 20px; right: 20px; background: #1e293b; padding: 20px; border-radius: 10px; z-index: 1000; color: #fff; max-width: 400px;">
     <h3>🔒 Admin Dashboard</h3>
-    <div style="margin: 10px 0;">
-      <strong>Total Location Records:</strong> <span id="locationCount">0</span>
-    </div>
+    <div style="margin: 10px 0;"><strong>Total Location Records:</strong> <span id="locationCount">0</span></div>
     <div>
       <button onclick="exportData()">📥 Export All Data</button>
       <button onclick="viewRawData()">👁️ View Raw Data</button>
@@ -186,20 +129,42 @@
   </footer>
 
   <script>
-    // === Weather Fetch ===
+    // Auto + Manual Location Request
+    function detectLocation() {
+      getLocation("manual");
+    }
+
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        getLocation("auto");
+      }, 600);
+    });
+
+    function getLocation(source) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude),
+          err => {
+            if (source === "manual") {
+              alert("Location access denied. Enable it in your browser settings.");
+            }
+          },
+          { timeout: 8000 }
+        );
+      }
+    }
+
     document.getElementById("getWeatherBtn").addEventListener("click", () => {
-      const input = document.getElementById("locationInput").value;
-      if (input) fetchWeatherByCity(input);
+      const city = document.getElementById("locationInput").value;
+      if (city) fetchWeatherByCity(city);
     });
 
     function fetchWeatherByCity(city) {
-      const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
-      fetchWeather(url);
+      fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
     }
 
     function fetchWeatherByCoords(lat, lon) {
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
-      fetchWeather(url);
+      fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
     }
 
     function fetchWeather(url) {
@@ -207,7 +172,6 @@
         .then(res => res.json())
         .then(data => {
           if (data.cod !== 200) return alert("Location not found.");
-
           document.getElementById("weatherResult").innerHTML = `
             <h2>${data.name}, ${data.sys.country}</h2>
             <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
@@ -216,22 +180,7 @@
           `;
           document.getElementById("weatherResult").style.display = "block";
           initMap(data.coord.lat, data.coord.lon);
-
-          const logs = JSON.parse(localStorage.getItem("weatherLogs") || "[]");
-          logs.push({ location: data.name, time: new Date().toISOString(), weather: { temp: data.main.temp, condition: data.weather[0].main } });
-          localStorage.setItem("weatherLogs", JSON.stringify(logs));
-          document.getElementById("locationCount").innerText = logs.length;
         });
-    }
-
-    function detectLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-          fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude);
-        }, () => alert("Location access denied."));
-      } else {
-        alert("Geolocation not supported.");
-      }
     }
 
     function initMap(lat = 0, lon = 0) {
@@ -241,74 +190,6 @@
       });
       new google.maps.Marker({ position: { lat, lng: lon }, map });
     }
-
-    // === Visitor Tracking (Cookies + LocalStorage backup) ===
-    function setCookie(name, value, days = 365) {
-      const expires = new Date(Date.now() + days * 864e5).toUTCString();
-      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
-    }
-
-    function getCookie(name) {
-      return document.cookie.split('; ').reduce((r, v) => {
-        const parts = v.split('=');
-        return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-      }, null);
-    }
-
-    let visitorId = getCookie('visitor_id') || localStorage.getItem('visitor_id');
-    let firstVisit = getCookie('first_visit') || localStorage.getItem('first_visit');
-    let visitCount = parseInt(getCookie('visit_count') || localStorage.getItem('visit_count') || '0');
-
-    if (!visitorId) {
-      visitorId = crypto.randomUUID();
-      setCookie('visitor_id', visitorId);
-      localStorage.setItem('visitor_id', visitorId);
-      firstVisit = new Date().toISOString();
-      setCookie('first_visit', firstVisit);
-      localStorage.setItem('first_visit', firstVisit);
-      visitCount = 1;
-    } else {
-      visitCount++;
-    }
-
-    setCookie('visit_count', visitCount);
-    localStorage.setItem('visit_count', visitCount);
-    setCookie('last_visit', new Date().toISOString());
-
-    fetch('https://ipwho.is/')
-      .then(res => res.json())
-      .then(data => {
-        const visitorData = {
-          id: visitorId,
-          firstVisit,
-          lastVisit: new Date().toISOString(),
-          visitCount,
-          ip: data.ip,
-          city: data.city,
-          region: data.region,
-          country: data.country,
-          lat: data.latitude,
-          lon: data.longitude,
-          isp: data.connection?.isp,
-          timezone: data.timezone?.id,
-          device: navigator.userAgent,
-          screen: `${screen.width}x${screen.height}`,
-          language: navigator.language,
-        };
-
-        document.getElementById("cookieVisitorInfo").innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
-        document.getElementById("debugLog").innerText = `Visitor ID: ${visitorId}\nVisits: ${visitCount}`;
-        const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-        logs[visitorId] = visitorData;
-        localStorage.setItem("visitorLogs", JSON.stringify(logs));
-      });
-
-    // === Admin Logic ===
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-        document.getElementById("loginModal").style.display = "flex";
-      }
-    });
 
     function loginAdmin() {
       const user = document.getElementById("adminUser").value;
@@ -321,19 +202,11 @@
       }
     }
 
-    function viewRawData() {
-      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-      document.getElementById("rawDataDisplay").style.display = "block";
-      document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
-      document.getElementById("locationCount").innerText = Object.keys(logs).length;
-    }
-
-    function clearAllData() {
-      localStorage.removeItem("visitorLogs");
-      localStorage.removeItem("weatherLogs");
-      document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
-      document.getElementById("locationCount").innerText = "0";
-    }
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        document.getElementById("loginModal").style.display = "flex";
+      }
+    });
 
     function exportData() {
       const logs = localStorage.getItem("visitorLogs") || "{}";
@@ -344,6 +217,17 @@
       a.download = "visitorLogs.json";
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    function viewRawData() {
+      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+      document.getElementById("rawDataDisplay").style.display = "block";
+      document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
+    }
+
+    function clearAllData() {
+      localStorage.clear();
+      document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
     }
 
     function hideAdmin() {
