@@ -1,146 +1,251 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>WeatherScope - Local Weather & Conditions</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: #121212;
-        color: #ffffff;
-        margin: 0;
-        padding: 0;
-      }
-      #adminPanel {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: #333;
-        padding: 20px;
-        border-radius: 10px;
-        z-index: 1000;
-        color: #fff;
-        max-width: 400px;
-      }
-      button {
-        margin: 5px;
-        padding: 8px 12px;
-        cursor: pointer;
-      }
-    </style>
-  </head>
-  <body>
-    <!-- Main content of the weather application would be here -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WeatherScope - Local Weather & Conditions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #fff;
+    }
 
-    <!-- Hidden Admin Panel -->
-    <div id="adminPanel">
-      <h3>🔒 Admin Dashboard</h3>
-      <div style="margin: 15px 0; color: rgba(255,255,255,0.9);">
-        <strong>Total Location Records:</strong> <span id="locationCount">0</span>
-      </div>
-      <div style="margin: 15px 0;">
-        <button onclick="exportData()">📥 Export All Data</button>
-        <button onclick="viewRawData()">👁️ View Raw Data</button>
-        <button onclick="clearAllData()">🗑️ Clear All Data</button>
-        <button onclick="hideAdmin()">❌ Hide Panel</button>
-      </div>
-      <div id="rawDataDisplay" style="display: none;"></div>
-      <div id="cookieVisitorInfo" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px;"></div>
+    header {
+      background: #282828;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    #weatherContainer {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    #locationInput {
+      padding: 10px;
+      width: 250px;
+    }
+
+    #getWeatherBtn {
+      padding: 10px 15px;
+      margin-left: 10px;
+      cursor: pointer;
+    }
+
+    #weatherResult {
+      margin-top: 20px;
+      background: #333;
+      padding: 20px;
+      border-radius: 10px;
+      display: inline-block;
+      min-width: 300px;
+    }
+
+    #map {
+      width: 100%;
+      height: 400px;
+      margin-top: 20px;
+    }
+
+    #adminPanel {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #333;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 1000;
+      color: #fff;
+      max-width: 400px;
+    }
+
+    button {
+      margin: 5px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌤️ WeatherScope</h1>
+    <p>Check the current weather and location info</p>
+  </header>
+
+  <div id="weatherContainer">
+    <input type="text" id="locationInput" placeholder="Enter city or zip code">
+    <button id="getWeatherBtn">Get Weather</button>
+
+    <div id="weatherResult" style="display: none;"></div>
+    <div id="map"></div>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel">
+    <h3>🔒 Admin Dashboard</h3>
+    <div style="margin: 15px 0; color: rgba(255,255,255,0.9);">
+      <strong>Total Location Records:</strong> <span id="locationCount">0</span>
     </div>
+    <div style="margin: 15px 0;">
+      <button onclick="exportData()">📥 Export All Data</button>
+      <button onclick="viewRawData()">👁️ View Raw Data</button>
+      <button onclick="clearAllData()">🗑️ Clear All Data</button>
+      <button onclick="hideAdmin()">❌ Hide Panel</button>
+    </div>
+    <div id="rawDataDisplay" style="display: none;"></div>
+    <div id="cookieVisitorInfo" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px;"></div>
+  </div>
 
-    <script>
-      function setCookie(name, value, days = 365) {
-        const expires = new Date(Date.now() + days * 864e5).toUTCString();
-        document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
-      }
+  <script>
+    // === Weather Fetch ===
+    document.getElementById("getWeatherBtn").addEventListener("click", () => {
+      const location = document.getElementById("locationInput").value;
+      if (!location) return alert("Please enter a location.");
 
-      function getCookie(name) {
-        return document.cookie.split('; ').reduce((r, v) => {
-          const parts = v.split('=');
-          return parts[0] === name ? decodeURIComponent(parts[1]) : r;
-        }, null);
-      }
-
-      let visitorId = getCookie('visitor_id');
-      let firstVisit = getCookie('first_visit');
-      let visitCount = parseInt(getCookie('visit_count') || '0');
-
-      if (!visitorId) {
-        visitorId = crypto.randomUUID();
-        setCookie('visitor_id', visitorId);
-        firstVisit = new Date().toISOString();
-        setCookie('first_visit', firstVisit);
-        visitCount = 1;
-      } else {
-        visitCount++;
-      }
-
-      setCookie('visit_count', visitCount);
-      setCookie('last_visit', new Date().toISOString());
-
-      fetch('https://ipwho.is/')
+      fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`)
         .then(res => res.json())
         .then(data => {
-          const visitorData = {
-            id: visitorId,
-            firstVisit,
-            lastVisit: new Date().toISOString(),
-            visitCount,
-            ip: data.ip,
-            city: data.city,
-            region: data.region,
-            country: data.country,
-            lat: data.latitude,
-            lon: data.longitude,
-            isp: data.connection?.isp,
-            timezone: data.timezone?.id,
-            device: navigator.userAgent,
-            screen: `${screen.width}x${screen.height}`,
-            language: navigator.language,
-          };
+          if (data.cod !== 200) return alert("Location not found.");
 
-          // Display in Admin Panel
-          const logDiv = document.getElementById("cookieVisitorInfo");
-          if (logDiv) {
-            logDiv.innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
-          }
+          const html = `
+            <h2>${data.name}, ${data.sys.country}</h2>
+            <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
+            <p><strong>Weather:</strong> ${data.weather[0].main}</p>
+            <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
+          `;
 
-          // Save to localStorage for basic tracking
-          const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-          logs[visitorId] = visitorData;
-          localStorage.setItem("visitorLogs", JSON.stringify(logs));
+          document.getElementById("weatherResult").innerHTML = html;
+          document.getElementById("weatherResult").style.display = "block";
+          initMap(data.coord.lat, data.coord.lon);
+
+          // Log to localStorage
+          const logs = JSON.parse(localStorage.getItem("weatherLogs") || "[]");
+          logs.push({
+            location: location,
+            time: new Date().toISOString(),
+            weather: {
+              temp: data.main.temp,
+              condition: data.weather[0].main
+            }
+          });
+          localStorage.setItem("weatherLogs", JSON.stringify(logs));
+          document.getElementById("locationCount").innerText = logs.length;
         });
+    });
 
-      function viewRawData() {
+    function initMap(lat = 0, lon = 0) {
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat, lng: lon },
+        zoom: 8,
+      });
+      new google.maps.Marker({ position: { lat, lng: lon }, map });
+    }
+
+    // === Visitor Tracking ===
+    function setCookie(name, value, days = 365) {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+    }
+
+    function getCookie(name) {
+      return document.cookie.split('; ').reduce((r, v) => {
+        const parts = v.split('=');
+        return parts[0] === name ? decodeURIComponent(parts[1]) : r;
+      }, null);
+    }
+
+    let visitorId = getCookie('visitor_id');
+    let firstVisit = getCookie('first_visit');
+    let visitCount = parseInt(getCookie('visit_count') || '0');
+
+    if (!visitorId) {
+      visitorId = crypto.randomUUID();
+      setCookie('visitor_id', visitorId);
+      firstVisit = new Date().toISOString();
+      setCookie('first_visit', firstVisit);
+      visitCount = 1;
+    } else {
+      visitCount++;
+    }
+
+    setCookie('visit_count', visitCount);
+    setCookie('last_visit', new Date().toISOString());
+
+    fetch('https://ipwho.is/')
+      .then(res => res.json())
+      .then(data => {
+        const visitorData = {
+          id: visitorId,
+          firstVisit,
+          lastVisit: new Date().toISOString(),
+          visitCount,
+          ip: data.ip,
+          city: data.city,
+          region: data.region,
+          country: data.country,
+          lat: data.latitude,
+          lon: data.longitude,
+          isp: data.connection?.isp,
+          timezone: data.timezone?.id,
+          device: navigator.userAgent,
+          screen: `${screen.width}x${screen.height}`,
+          language: navigator.language,
+        };
+
+        const logDiv = document.getElementById("cookieVisitorInfo");
+        if (logDiv) {
+          logDiv.innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
+        }
+
         const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-        document.getElementById("rawDataDisplay").style.display = "block";
-        document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
-        document.getElementById("locationCount").innerText = Object.keys(logs).length;
-      }
+        logs[visitorId] = visitorData;
+        localStorage.setItem("visitorLogs", JSON.stringify(logs));
+      });
 
-      function clearAllData() {
-        localStorage.removeItem("visitorLogs");
-        document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
-        document.getElementById("locationCount").innerText = "0";
-      }
+    // === Admin Panel Functions ===
+    function viewRawData() {
+      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+      document.getElementById("rawDataDisplay").style.display = "block";
+      document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
+      document.getElementById("locationCount").innerText = Object.keys(logs).length;
+    }
 
-      function exportData() {
-        const logs = localStorage.getItem("visitorLogs") || "{}";
-        const blob = new Blob([logs], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "visitorLogs.json";
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+    function clearAllData() {
+      localStorage.removeItem("visitorLogs");
+      localStorage.removeItem("weatherLogs");
+      document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
+      document.getElementById("locationCount").innerText = "0";
+    }
 
-      function hideAdmin() {
-        document.getElementById("adminPanel").style.display = "none";
-      }
-    </script>
+    function exportData() {
+      const logs = localStorage.getItem("visitorLogs") || "{}";
+      const blob = new Blob([logs], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "visitorLogs.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
 
-    <!-- Replace YOUR_API_KEY_HERE with your actual API key -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&callback=initMap"></script>
-  </body>
+    function hideAdmin() {
+      document.getElementById("adminPanel").style.display = "none";
+    }
+  </script>
+
+  <!-- Replace with your API keys -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap"></script>
+</body>
 </html>
