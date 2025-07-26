@@ -7,20 +7,21 @@
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #1e1e1e;
-      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #101418;
+      color: #f0f0f0;
     }
 
     header {
-      background: #282828;
-      padding: 20px;
+      background: #1f2933;
+      padding: 25px;
       text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
     }
 
     h1 {
       margin: 0;
-      font-size: 28px;
+      font-size: 30px;
     }
 
     #weatherContainer {
@@ -28,53 +29,102 @@
       padding: 40px 20px;
     }
 
-    #locationInput {
+    input[type="text"] {
       padding: 10px;
-      width: 250px;
+      width: 280px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      outline: none;
     }
 
-    #getWeatherBtn {
-      padding: 10px 15px;
+    button {
+      padding: 10px 16px;
       margin-left: 10px;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 5px;
       cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #3730a3;
     }
 
     #weatherResult {
-      margin-top: 20px;
-      background: #333;
+      margin-top: 30px;
+      background: #1e293b;
       padding: 20px;
       border-radius: 10px;
       display: inline-block;
-      min-width: 300px;
+      text-align: left;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
     }
 
     #map {
       width: 100%;
       height: 400px;
-      margin-top: 20px;
+      margin-top: 30px;
+      border-top: 1px solid #333;
+    }
+
+    /* Admin Login Modal */
+    #loginModal {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.8);
+      z-index: 9999;
+    }
+
+    #loginModal > div {
+      background: #1f2933;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      width: 300px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+
+    #loginModal input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      border: none;
+      border-radius: 5px;
     }
 
     #adminPanel {
       position: fixed;
-      top: 10px;
-      right: 10px;
-      background: #333;
+      top: 20px;
+      right: 20px;
+      background: #1e293b;
       padding: 20px;
       border-radius: 10px;
       z-index: 1000;
       color: #fff;
       max-width: 400px;
-    }
-
-    button {
-      margin: 5px;
-      padding: 8px 12px;
-      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      display: none;
     }
 
     pre {
       white-space: pre-wrap;
       word-wrap: break-word;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: #999;
+      border-top: 1px solid #2e3a4a;
+      margin-top: 40px;
     }
   </style>
 </head>
@@ -92,21 +142,36 @@
     <div id="map"></div>
   </div>
 
+  <!-- Login Modal -->
+  <div id="loginModal">
+    <div>
+      <h3>🔐 Admin Login</h3>
+      <input type="text" id="adminUser" placeholder="Username"><br>
+      <input type="password" id="adminPass" placeholder="Password"><br>
+      <button onclick="loginAdmin()">Login</button>
+      <p id="loginError" style="color: red; font-size: 12px; display: none;">Invalid credentials</p>
+    </div>
+  </div>
+
   <!-- Admin Panel -->
   <div id="adminPanel">
     <h3>🔒 Admin Dashboard</h3>
-    <div style="margin: 15px 0; color: rgba(255,255,255,0.9);">
+    <div style="margin: 10px 0;">
       <strong>Total Location Records:</strong> <span id="locationCount">0</span>
     </div>
-    <div style="margin: 15px 0;">
+    <div>
       <button onclick="exportData()">📥 Export All Data</button>
       <button onclick="viewRawData()">👁️ View Raw Data</button>
       <button onclick="clearAllData()">🗑️ Clear All Data</button>
       <button onclick="hideAdmin()">❌ Hide Panel</button>
     </div>
-    <div id="rawDataDisplay" style="display: none;"></div>
-    <div id="cookieVisitorInfo" style="margin-top: 20px; background: rgba(255,255,255,0.1); color: white; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px;"></div>
+    <div id="rawDataDisplay" style="margin-top: 15px; display: none;"></div>
+    <div id="cookieVisitorInfo" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px;"></div>
   </div>
+
+  <footer>
+    WeatherScope © 2025 — Powered by OpenWeather & Google Maps
+  </footer>
 
   <script>
     // === Weather Fetch ===
@@ -130,10 +195,10 @@
           document.getElementById("weatherResult").style.display = "block";
           initMap(data.coord.lat, data.coord.lon);
 
-          // Log to localStorage
+          // Store location log
           const logs = JSON.parse(localStorage.getItem("weatherLogs") || "[]");
           logs.push({
-            location: location,
+            location,
             time: new Date().toISOString(),
             weather: {
               temp: data.main.temp,
@@ -214,7 +279,19 @@
         localStorage.setItem("visitorLogs", JSON.stringify(logs));
       });
 
-    // === Admin Panel Functions ===
+    // === Admin Login + Panel ===
+    function loginAdmin() {
+      const user = document.getElementById("adminUser").value;
+      const pass = document.getElementById("adminPass").value;
+
+      if (user === "admin" && pass === "admin123") {
+        document.getElementById("loginModal").style.display = "none";
+        document.getElementById("adminPanel").style.display = "block";
+      } else {
+        document.getElementById("loginError").style.display = "block";
+      }
+    }
+
     function viewRawData() {
       const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
       document.getElementById("rawDataDisplay").style.display = "block";
@@ -245,7 +322,6 @@
     }
   </script>
 
-  <!-- Replace with your API keys -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap"></script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&callback=initMap"></script>
 </body>
 </html>
