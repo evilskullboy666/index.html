@@ -4,12 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WeatherScope Pro</title>
+  <title>WeatherScope - Location Tracker</title>
   <style>
-    * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Segoe UI', sans-serif;
       background: linear-gradient(135deg, #74b9ff, #0984e3);
       color: #fff;
       text-align: center;
@@ -25,25 +24,6 @@
       font-size: 2.5rem;
       color: #fff;
     }
-    main {
-      padding: 2rem 1rem;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    button {
-      background: #fff;
-      color: #0984e3;
-      border: none;
-      border-radius: 30px;
-      padding: 0.8rem 1.6rem;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background 0.3s;
-      margin: 1rem 0;
-    }
-    button:hover {
-      background: #f1f1f1;
-    }
     #map {
       height: 400px;
       width: 100%;
@@ -51,73 +31,217 @@
       border-radius: 12px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    .location-info {
+    #locationStatus {
       font-size: 1.2rem;
-      margin: 1rem 0;
+      margin: 1rem;
+    }
+    #adminPanel {
+      display: none;
+      background: rgba(255,255,255,0.1);
+      margin: 2rem auto;
+      padding: 1.5rem;
+      border-radius: 15px;
+      max-width: 800px;
+      text-align: left;
+    }
+    #adminPanel h2 { color: #fff; }
+    #adminPanel button {
+      background: #fff;
+      color: #0984e3;
+      border: none;
+      padding: 10px 16px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #rawDataDisplay {
+      white-space: pre-wrap;
+      background: #333;
+      color: #0f0;
+      padding: 1rem;
+      margin-top: 1rem;
+      border-radius: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #loginModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(5px);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .login-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 15px;
+      text-align: center;
+      color: #000;
+      max-width: 300px;
+      width: 100%;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>🌤️ WeatherScope Pro</h1>
-    <p>Your real-time local weather and location assistant</p>
+    <h1>🌐 WeatherScope</h1>
+    <p id="locationStatus">Attempting to get your location...</p>
   </header>
+  <div id="map"></div>
 
-  <main>
-    <button onclick="requestUserLocation()">📍 Get My Location</button>
-    <div class="location-info" id="locationStatus">Location not yet retrieved.</div>
-    <div id="map"></div>
-  </main>
+  <!-- Admin Panel -->
+  <div id="adminPanel">
+    <h2>🔒 Admin Panel</h2>
+    <p>Total Records: <span id="locationCount">0</span></p>
+    <button onclick="exportData()">📥 Export CSV</button>
+    <button onclick="viewRawData()">👁️ View Raw Data</button>
+    <button onclick="clearAllData()">🗑️ Clear All Data</button>
+    <div id="rawDataDisplay" style="display:none;"></div>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="loginModal">
+    <div class="login-box">
+      <h3>Admin Login</h3>
+      <input id="adminUsername" type="text" placeholder="Username" />
+      <input id="adminPassword" type="password" placeholder="Password" />
+      <br/><br/>
+      <button onclick="attemptLogin()">Login</button>
+    </div>
+  </div>
 
   <script>
     let map;
     let marker;
 
+    window.onload = function () {
+      checkAdminAccess();
+      initMap();
+      getLocation();
+    };
+
     function initMap(lat = 0, lng = 0) {
-      const position = { lat, lng };
+      const pos = { lat, lng };
       map = new google.maps.Map(document.getElementById("map"), {
-        center: position,
-        zoom: lat === 0 && lng === 0 ? 2 : 14,
+        center: pos,
+        zoom: lat === 0 ? 2 : 14
       });
 
       if (lat !== 0 && lng !== 0) {
         marker = new google.maps.Marker({
-          position,
+          position: pos,
           map,
-          title: "Your Location"
+          title: "You are here"
         });
       }
     }
 
-    function requestUserLocation() {
-      const status = document.getElementById('locationStatus');
+    function getLocation() {
+      const status = document.getElementById("locationStatus");
       if (!navigator.geolocation) {
-        status.textContent = "Geolocation is not supported by your browser.";
-        initMap();
+        status.textContent = "Geolocation not supported.";
         return;
       }
 
-      status.textContent = "Detecting your location...";
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-          status.textContent = `📍 Latitude: ${lat.toFixed(4)}, Longitude: ${lng.toFixed(4)}`;
+          status.textContent = `📍 Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
           initMap(lat, lng);
+          saveLocation(lat, lng);
         },
-        (error) => {
-          console.error("Error getting location:", error);
-          status.textContent = "Could not get your location.";
-          initMap();
+        () => {
+          status.textContent = "Unable to retrieve location.";
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
-  </script>
 
-  <script async
-    defer
-    src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE">
+    function saveLocation(lat, lng) {
+      const stored = JSON.parse(localStorage.getItem("locations") || "[]");
+      stored.push({
+        lat, lng,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem("locations", JSON.stringify(stored));
+    }
+
+    function checkAdminAccess() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("admin") === "secret") {
+        showLoginModal();
+      }
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.shiftKey && e.key === "A") {
+        showLoginModal();
+      }
+    });
+
+    function showLoginModal() {
+      document.getElementById("loginModal").style.display = "flex";
+    }
+
+    function attemptLogin() {
+      const user = document.getElementById("adminUsername").value;
+      const pass = document.getElementById("adminPassword").value;
+      if (user === "admin" && pass === "epic") {
+        document.getElementById("loginModal").style.display = "none";
+        document.getElementById("adminPanel").style.display = "block";
+        updateLocationCount();
+      } else {
+        alert("Wrong login");
+      }
+    }
+
+    function updateLocationCount() {
+      const data = JSON.parse(localStorage.getItem("locations") || "[]");
+      document.getElementById("locationCount").textContent = data.length;
+    }
+
+    function exportData() {
+      const data = JSON.parse(localStorage.getItem("locations") || "[]");
+      if (!data.length) return alert("No data to export");
+      let csv = "Timestamp,Latitude,Longitude\n";
+      data.forEach(d => {
+        csv += `${d.timestamp},${d.lat},${d.lng}\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "location_data.csv";
+      a.click();
+    }
+
+    function viewRawData() {
+      const box = document.getElementById("rawDataDisplay");
+      const data = JSON.parse(localStorage.getItem("locations") || "[]");
+      box.innerText = JSON.stringify(data, null, 2);
+      box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+
+    function clearAllData() {
+      if (confirm("Delete all stored location data?")) {
+        localStorage.removeItem("locations");
+        updateLocationCount();
+        document.getElementById("rawDataDisplay").style.display = "none";
+      }
+    }
   </script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AlzaSyB_Wf43YltG5wLQ9uPXtjhGc7bfAa9B09w
+"></script>
 </body>
 </html>
