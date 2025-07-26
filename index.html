@@ -69,9 +69,8 @@
       border-top: 1px solid #333;
     }
 
-    /* Admin Login Modal */
     #loginModal {
-      display: flex;
+      display: none;
       justify-content: center;
       align-items: center;
       position: fixed;
@@ -113,11 +112,6 @@
       display: none;
     }
 
-    pre {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-
     footer {
       text-align: center;
       padding: 20px;
@@ -125,6 +119,11 @@
       color: #999;
       border-top: 1px solid #2e3a4a;
       margin-top: 40px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
   </style>
 </head>
@@ -142,7 +141,7 @@
     <div id="map"></div>
   </div>
 
-  <!-- Login Modal -->
+  <!-- Hidden Admin Login Modal -->
   <div id="loginModal">
     <div>
       <h3>🔐 Admin Login</h3>
@@ -175,30 +174,37 @@
 
   <script>
     // === Weather Fetch ===
-    document.getElementById("getWeatherBtn").addEventListener("click", () => {
-      const location = document.getElementById("locationInput").value;
-      if (!location) return alert("Please enter a location.");
+    document.getElementById("getWeatherBtn").addEventListener("click", fetchWeather);
 
-      fetch(`https://api.openweathermap.org/data/2.5/weather?q=${location}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`)
+    function fetchWeather(lat = null, lon = null) {
+      let location = document.getElementById("locationInput").value;
+      let url = "";
+
+      if (lat && lon) {
+        url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
+      } else if (location) {
+        url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
+      } else {
+        alert("Enter a location.");
+        return;
+      }
+
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           if (data.cod !== 200) return alert("Location not found.");
-
-          const html = `
+          document.getElementById("weatherResult").innerHTML = `
             <h2>${data.name}, ${data.sys.country}</h2>
             <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
             <p><strong>Weather:</strong> ${data.weather[0].main}</p>
             <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
           `;
-
-          document.getElementById("weatherResult").innerHTML = html;
           document.getElementById("weatherResult").style.display = "block";
           initMap(data.coord.lat, data.coord.lon);
 
-          // Store location log
           const logs = JSON.parse(localStorage.getItem("weatherLogs") || "[]");
           logs.push({
-            location,
+            location: data.name,
             time: new Date().toISOString(),
             weather: {
               temp: data.main.temp,
@@ -208,7 +214,7 @@
           localStorage.setItem("weatherLogs", JSON.stringify(logs));
           document.getElementById("locationCount").innerText = logs.length;
         });
-    });
+    }
 
     function initMap(lat = 0, lon = 0) {
       const map = new google.maps.Map(document.getElementById("map"), {
@@ -217,6 +223,15 @@
       });
       new google.maps.Marker({ position: { lat, lng: lon }, map });
     }
+
+    // === Location Request on Load ===
+    window.onload = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          fetchWeather(pos.coords.latitude, pos.coords.longitude);
+        });
+      }
+    };
 
     // === Visitor Tracking ===
     function setCookie(name, value, days = 365) {
@@ -269,21 +284,16 @@
           language: navigator.language,
         };
 
-        const logDiv = document.getElementById("cookieVisitorInfo");
-        if (logDiv) {
-          logDiv.innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
-        }
-
+        document.getElementById("cookieVisitorInfo").innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
         const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
         logs[visitorId] = visitorData;
         localStorage.setItem("visitorLogs", JSON.stringify(logs));
       });
 
-    // === Admin Login + Panel ===
+    // === Admin Panel Logic ===
     function loginAdmin() {
       const user = document.getElementById("adminUser").value;
       const pass = document.getElementById("adminPass").value;
-
       if (user === "admin" && pass === "admin123") {
         document.getElementById("loginModal").style.display = "none";
         document.getElementById("adminPanel").style.display = "block";
@@ -291,6 +301,12 @@
         document.getElementById("loginError").style.display = "block";
       }
     }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        document.getElementById("loginModal").style.display = "flex";
+      }
+    });
 
     function viewRawData() {
       const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
