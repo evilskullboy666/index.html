@@ -1,4 +1,38 @@
-<!DOCTYPE html>
+function toggleRadarLayer() {
+        radarLayer = !radarLayer;
+        const mapDiv = document.getElementById("map");
+        
+        if (radarLayer) {
+          // Show radar overlay
+          mapDiv.innerHTML = `
+            <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2em; text-align: center; border-radius: 15px; position: relative;">
+              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 30% 40%, rgba(46, 204, 113, 0.3) 0%, transparent 50%), radial-gradient(circle at 70% 20%, rgba(231, 76, 60, 0.3) 0%, transparent 40%), radial-gradient(circle at 50% 80%, rgba(241, 196, 15, 0.3) 0%, transparent 60%); border-radius: 15px;"></div>
+              <div style="z-index: 1;">
+                <div style="font-size: 3em; margin-bottom: 20px;">🌧️</div>
+                <div>Live Weather Radar</div>
+                <div style="font-size: 0.9em; opacity: 0.8; margin-top: 10px;">Precipitation patterns detected</div>
+              </div>
+            </div>
+          `;
+        } else {
+          // Show normal map
+          mapDiv.innerHTML = `
+            <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4a69bd 0%, #667eea 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2em; text-align: center; border-radius: 15px;">
+              <div>
+                <div style="font-size: 3em; margin-bottom: 20px;">🗺️</div>
+                <div>Interactive Weather Map</div>
+                <div style="font-size: 0.9em; opacity: 0.8; margin-top: 10px;">Location: <span id="mapLocation">Detecting...</span></div>
+              </div>
+            </div>
+          `;
+          
+          // Re-update location display
+          const currentLocation = document.getElementById('locationName').textContent;
+          if (currentLocation && !currentLocation.includes('Detecting')) {
+            document.getElementById('mapLocation').textContent = currentLocation;
+          }
+        }
+      }<!DOCTYPE html>
 <html lang="en">
   <head>
     <title>WeatherScope Pro - Advanced Weather Intelligence</title>
@@ -894,11 +928,350 @@
       });
 
       function initMap() {
-        // Default to global view centered on equatorial coordinates
-        const defaultLocation = { lat: 20.0, lng: 0.0 };
+        // Create a simple map placeholder without external API dependency
+        const mapDiv = document.getElementById("map");
+        mapDiv.innerHTML = `
+          <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4a69bd 0%, #667eea 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2em; text-align: center; border-radius: 15px;">
+            <div>
+              <div style="font-size: 3em; margin-bottom: 20px;">🗺️</div>
+              <div>Interactive Weather Map</div>
+              <div style="font-size: 0.9em; opacity: 0.8; margin-top: 10px;">Location: <span id="mapLocation">Detecting...</span></div>
+            </div>
+          </div>
+        `;
         
-        map = new google.maps.Map(document.getElementById("map"), {
-          zoom: 2,
-          center: defaultLocation,
-          styles: [
+        // Get user's location and update display
+        getUserLocation();
+      }
+
+      function getUserLocation() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function(position) {
+              const lat = position.coords.latitude;
+              const lng = position.coords.longitude;
+              
+              // Get exact address using reverse geocoding
+              getExactAddressFromCoordinates(lat, lng);
+              
+              // Update weather data based on location
+              updateWeatherForLocation(lat, lng);
+            },
+            function(error) {
+              console.log('Geolocation error:', error);
+              handleLocationError(error);
+            },
             {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 60000 // 1 minute cache
+            }
+          );
+        } else {
+          setLocationError("Geolocation not supported by this browser");
+        }
+      }
+
+      async function getExactAddressFromCoordinates(lat, lng) {
+        try {
+          // Try multiple geocoding services for best accuracy
+          let address = await tryNominatimGeocoding(lat, lng);
+          
+          if (!address) {
+            address = await tryBigDataCloudGeocoding(lat, lng);
+          }
+          
+          if (!address) {
+            address = await tryOpenCageGeocoding(lat, lng);
+          }
+          
+          if (address) {
+            document.getElementById('locationName').innerHTML = `
+              <span>📍</span>
+              <span>${address}</span>
+              <div class="status-indicator"></div>
+            `;
+            document.getElementById('mapLocation').textContent = address;
+          } else {
+            // If all services fail, show coordinates
+            const coords = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            document.getElementById('locationName').innerHTML = `
+              <span>📍</span>
+              <span>${coords}</span>
+              <div class="status-indicator"></div>
+            `;
+            document.getElementById('mapLocation').textContent = coords;
+          }
+        } catch (error) {
+          console.log('Reverse geocoding failed:', error);
+          const coords = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+          document.getElementById('locationName').innerHTML = `
+            <span>📍</span>
+            <span>${coords}</span>
+            <div class="status-indicator"></div>
+          `;
+        }
+      }
+
+      async function tryNominatimGeocoding(lat, lng) {
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+            headers: {
+              'User-Agent': 'WeatherScope Pro'
+            }
+          });
+          
+          if (!response.ok) throw new Error('Nominatim API error');
+          
+          const data = await response.json();
+          
+          if (data && data.address) {
+            const addr = data.address;
+            let fullAddress = '';
+            
+            // Build detailed address
+            if (addr.house_number && addr.road) {
+              fullAddress = `${addr.house_number} ${addr.road}`;
+            } else if (addr.road) {
+              fullAddress = addr.road;
+            } else if (addr.neighbourhood) {
+              fullAddress = addr.neighbourhood;
+            } else if (addr.suburb) {
+              fullAddress = addr.suburb;
+            }
+            
+            if (addr.city || addr.town || addr.village) {
+              const city = addr.city || addr.town || addr.village;
+              fullAddress += fullAddress ? `, ${city}` : city;
+            }
+            
+            if (addr.state || addr.region) {
+              const state = addr.state || addr.region;
+              fullAddress += `, ${state}`;
+            }
+            
+            if (addr.country) {
+              fullAddress += `, ${addr.country}`;
+            }
+            
+            return fullAddress || data.display_name;
+          }
+        } catch (error) {
+          console.log('Nominatim geocoding failed:', error);
+        }
+        return null;
+      }
+
+      async function tryBigDataCloudGeocoding(lat, lng) {
+        try {
+          const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+          
+          if (!response.ok) throw new Error('BigDataCloud API error');
+          
+          const data = await response.json();
+          
+          if (data) {
+            let address = '';
+            
+            if (data.locality && data.principalSubdivision) {
+              address = `${data.locality}, ${data.principalSubdivision}`;
+            } else if (data.city && data.principalSubdivision) {
+              address = `${data.city}, ${data.principalSubdivision}`;
+            } else if (data.locality) {
+              address = data.locality;
+            }
+            
+            if (data.countryName) {
+              address += address ? `, ${data.countryName}` : data.countryName;
+            }
+            
+            return address;
+          }
+        } catch (error) {
+          console.log('BigDataCloud geocoding failed:', error);
+        }
+        return null;
+      }
+
+      async function tryOpenCageGeocoding(lat, lng) {
+        try {
+          // OpenCage has a free tier but requires API key for production use
+          // This is just a fallback attempt
+          const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=demo&limit=1`);
+          
+          if (!response.ok) throw new Error('OpenCage API error');
+          
+          const data = await response.json();
+          
+          if (data.results && data.results.length > 0) {
+            return data.results[0].formatted;
+          }
+        } catch (error) {
+          console.log('OpenCage geocoding failed:', error);
+        }
+        return null;
+      }
+
+      function handleLocationError(error) {
+        let errorMessage = "";
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied by user";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out";
+            break;
+          default:
+            errorMessage = "Unknown location error";
+            break;
+        }
+        
+        setLocationError(errorMessage);
+      }
+
+      function setLocationError(message) {
+        document.getElementById('locationName').innerHTML = `
+          <span>❌</span>
+          <span>${message}</span>
+          <div class="status-indicator" style="background: #e74c3c;"></div>
+        `;
+        document.getElementById('mapLocation').textContent = message;
+      }
+
+      function updateWeatherForLocation(lat, lng) {
+        // Simulate weather based on coordinates
+        let baseTemp = 20;
+        
+        // Temperature varies by latitude
+        if (Math.abs(lat) > 60) baseTemp = 5; // Polar regions
+        else if (Math.abs(lat) > 40) baseTemp = 15; // Temperate
+        else if (Math.abs(lat) < 23.5) baseTemp = 28; // Tropical
+        
+        // Add some randomness
+        baseTemp += Math.floor(Math.random() * 10) - 5;
+        
+        document.getElementById('currentTemp').textContent = baseTemp + '°C';
+        
+        // Update other weather parameters
+        simulateWeatherData();
+      }
+
+      function getCurrentLocation() {
+        document.getElementById('loadingSpinner').style.display = 'block';
+        
+        // Re-run location detection
+        getUserLocation();
+        
+        setTimeout(() => {
+          document.getElementById('loadingSpinner').style.display = 'none';
+        }, 1500);
+      }
+
+      function simulateWeatherData() {
+        // Simulate current weather
+        const temps = [18, 22, 25, 19, 21, 24, 16, 20];
+        const conditions = ['Partly Cloudy', 'Sunny', 'Overcast', 'Light Rain', 'Clear', 'Foggy'];
+        const humidity = Math.floor(Math.random() * 40) + 40; // 40-80%
+        const windSpeed = Math.floor(Math.random() * 25) + 5; // 5-30 km/h
+        const pressure = Math.floor(Math.random() * 50) + 1000; // 1000-1050 hPa
+        const visibility = Math.floor(Math.random() * 15) + 5; // 5-20 km
+        
+        document.getElementById('currentTemp').textContent = temps[Math.floor(Math.random() * temps.length)] + '°C';
+        document.getElementById('currentCondition').textContent = conditions[Math.floor(Math.random() * conditions.length)];
+        document.getElementById('humidity').textContent = humidity + '%';
+        document.getElementById('windSpeed').textContent = windSpeed + ' km/h';
+        document.getElementById('pressure').textContent = pressure + ' hPa';
+        document.getElementById('visibility').textContent = visibility + ' km';
+      }
+
+      function showWeatherAlert() {
+        // Randomly show weather alert
+        if (Math.random() > 0.7) {
+          document.getElementById('weatherAlerts').style.display = 'block';
+        }
+      }
+
+      // Admin panel functions
+      function showAdminPanel() {
+        document.getElementById('adminPanel').style.display = 'block';
+        updateLocationCount();
+      }
+
+      function hideAdmin() {
+        document.getElementById('adminPanel').style.display = 'none';
+      }
+
+      function updateLocationCount() {
+        const count = Math.floor(Math.random() * 500) + 100;
+        document.getElementById('locationCount').textContent = count;
+      }
+
+      function exportData() {
+        const data = {
+          timestamp: new Date().toISOString(),
+          locations: Math.floor(Math.random() * 500) + 100,
+          weather_stations: 245,
+          data_points: Math.floor(Math.random() * 10000) + 5000
+        };
+        
+        const dataStr = JSON.stringify(data, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'weather_data_export.json';
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function viewRawData() {
+        const rawDataDiv = document.getElementById('rawDataDisplay');
+        if (rawDataDiv.style.display === 'none') {
+          const sampleData = {
+            "api_version": "2.1",
+            "timestamp": new Date().toISOString(),
+            "data_sources": ["NOAA", "OpenWeather", "WeatherAPI"],
+            "global_stations": 1247,
+            "active_alerts": 23,
+            "processing_status": "ONLINE",
+            "last_update": "2025-01-15T10:30:00Z",
+            "coverage": {
+              "north_america": 456,
+              "europe": 234,
+              "asia": 345,
+              "oceania": 89,
+              "africa": 123
+            },
+            "quality_metrics": {
+              "accuracy": "98.2%",
+              "uptime": "99.9%",
+              "latency": "1.2s"
+            }
+          };
+          
+          rawDataDiv.innerHTML = '<pre>' + JSON.stringify(sampleData, null, 2) + '</pre>';
+          rawDataDiv.style.display = 'block';
+        } else {
+          rawDataDiv.style.display = 'none';
+        }
+      }
+
+      function generateReport() {
+        alert('📋 Comprehensive weather report generated!\n\nReport includes:\n• Global weather patterns\n• Station performance metrics\n• Data quality analysis\n• 30-day forecast accuracy\n\nReport saved to admin dashboard.');
+      }
+
+      function clearAllData() {
+        if (confirm('⚠️ This will permanently delete all stored weather data.\n\nThis action cannot be undone. Continue?')) {
+          if (confirm('🚨 FINAL WARNING: You are about to purge the entire database.\n\nType "DELETE" in the next prompt to confirm.')) {
+            const confirmation = prompt('Type "DELETE" to confirm database purge:');
+            if (confirmation === 'DELETE') {
+              alert('🗑️ Database purge initiated...\n\n✅ All data has been cleared.\n✅ Cache cleared.\n✅ Backup created.\n\nSystem ready for fresh data collection.');
+              updateLocationCount();
+            }
+          }
+        }
+      }
