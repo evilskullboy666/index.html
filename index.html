@@ -39,7 +39,7 @@
 
     button {
       padding: 10px 16px;
-      margin-left: 10px;
+      margin: 10px 5px;
       background-color: #4f46e5;
       color: white;
       border: none;
@@ -125,6 +125,18 @@
       white-space: pre-wrap;
       word-wrap: break-word;
     }
+
+    #debugLog {
+      background: #222;
+      color: #ccc;
+      font-size: 12px;
+      padding: 10px;
+      margin: 15px;
+      border-radius: 5px;
+      max-width: 500px;
+      word-wrap: break-word;
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
@@ -136,9 +148,10 @@
   <div id="weatherContainer">
     <input type="text" id="locationInput" placeholder="Enter city or zip code">
     <button id="getWeatherBtn">Get Weather</button>
-
+    <button onclick="detectLocation()">📍 Use My Location</button>
     <div id="weatherResult" style="display: none;"></div>
     <div id="map"></div>
+    <div id="debugLog"></div>
   </div>
 
   <!-- Hidden Admin Login Modal -->
@@ -174,25 +187,27 @@
 
   <script>
     // === Weather Fetch ===
-    document.getElementById("getWeatherBtn").addEventListener("click", fetchWeather);
+    document.getElementById("getWeatherBtn").addEventListener("click", () => {
+      const input = document.getElementById("locationInput").value;
+      if (input) fetchWeatherByCity(input);
+    });
 
-    function fetchWeather(lat = null, lon = null) {
-      let location = document.getElementById("locationInput").value;
-      let url = "";
+    function fetchWeatherByCity(city) {
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
+      fetchWeather(url);
+    }
 
-      if (lat && lon) {
-        url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
-      } else if (location) {
-        url = `https://api.openweathermap.org/data/2.5/weather?q=${location}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
-      } else {
-        alert("Enter a location.");
-        return;
-      }
+    function fetchWeatherByCoords(lat, lon) {
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`;
+      fetchWeather(url);
+    }
 
+    function fetchWeather(url) {
       fetch(url)
         .then(res => res.json())
         .then(data => {
           if (data.cod !== 200) return alert("Location not found.");
+
           document.getElementById("weatherResult").innerHTML = `
             <h2>${data.name}, ${data.sys.country}</h2>
             <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
@@ -203,17 +218,20 @@
           initMap(data.coord.lat, data.coord.lon);
 
           const logs = JSON.parse(localStorage.getItem("weatherLogs") || "[]");
-          logs.push({
-            location: data.name,
-            time: new Date().toISOString(),
-            weather: {
-              temp: data.main.temp,
-              condition: data.weather[0].main
-            }
-          });
+          logs.push({ location: data.name, time: new Date().toISOString(), weather: { temp: data.main.temp, condition: data.weather[0].main } });
           localStorage.setItem("weatherLogs", JSON.stringify(logs));
           document.getElementById("locationCount").innerText = logs.length;
         });
+    }
+
+    function detectLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude);
+        }, () => alert("Location access denied."));
+      } else {
+        alert("Geolocation not supported.");
+      }
     }
 
     function initMap(lat = 0, lon = 0) {
@@ -224,16 +242,7 @@
       new google.maps.Marker({ position: { lat, lng: lon }, map });
     }
 
-    // === Location Request on Load ===
-    window.onload = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-          fetchWeather(pos.coords.latitude, pos.coords.longitude);
-        });
-      }
-    };
-
-    // === Visitor Tracking ===
+    // === Visitor Tracking (Cookies + LocalStorage backup) ===
     function setCookie(name, value, days = 365) {
       const expires = new Date(Date.now() + days * 864e5).toUTCString();
       document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
@@ -246,21 +255,24 @@
       }, null);
     }
 
-    let visitorId = getCookie('visitor_id');
-    let firstVisit = getCookie('first_visit');
-    let visitCount = parseInt(getCookie('visit_count') || '0');
+    let visitorId = getCookie('visitor_id') || localStorage.getItem('visitor_id');
+    let firstVisit = getCookie('first_visit') || localStorage.getItem('first_visit');
+    let visitCount = parseInt(getCookie('visit_count') || localStorage.getItem('visit_count') || '0');
 
     if (!visitorId) {
       visitorId = crypto.randomUUID();
       setCookie('visitor_id', visitorId);
+      localStorage.setItem('visitor_id', visitorId);
       firstVisit = new Date().toISOString();
       setCookie('first_visit', firstVisit);
+      localStorage.setItem('first_visit', firstVisit);
       visitCount = 1;
     } else {
       visitCount++;
     }
 
     setCookie('visit_count', visitCount);
+    localStorage.setItem('visit_count', visitCount);
     setCookie('last_visit', new Date().toISOString());
 
     fetch('https://ipwho.is/')
@@ -285,12 +297,19 @@
         };
 
         document.getElementById("cookieVisitorInfo").innerHTML = `<pre>${JSON.stringify(visitorData, null, 2)}</pre>`;
+        document.getElementById("debugLog").innerText = `Visitor ID: ${visitorId}\nVisits: ${visitCount}`;
         const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
         logs[visitorId] = visitorData;
         localStorage.setItem("visitorLogs", JSON.stringify(logs));
       });
 
-    // === Admin Panel Logic ===
+    // === Admin Logic ===
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+        document.getElementById("loginModal").style.display = "flex";
+      }
+    });
+
     function loginAdmin() {
       const user = document.getElementById("adminUser").value;
       const pass = document.getElementById("adminPass").value;
@@ -301,12 +320,6 @@
         document.getElementById("loginError").style.display = "block";
       }
     }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-        document.getElementById("loginModal").style.display = "flex";
-      }
-    });
 
     function viewRawData() {
       const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
