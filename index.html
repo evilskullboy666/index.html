@@ -1,206 +1,259 @@
-<script>
-  let map;
-  let markers = [];
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WeatherScope - Local Weather & Conditions</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      /* (KEEP YOUR FULL EXISTING STYLES HERE — omitted for space) */
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>⛅ WeatherScope</h1>
+      <div class="tagline">Your Personal Weather & Location Assistant</div>
+    </div>
 
-  // Mobile-friendly location permission check
-  window.onload = function() {
-    // Ask only if permissions not previously denied (for iOS Safari support)
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
-        if (result.state !== 'denied') {
+    <div class="weather-container">
+      <div class="weather-cards">
+        <div class="weather-card current-weather">
+          <div class="location" id="locationName">📍 Detecting location...</div>
+          <div class="temp">--°</div>
+          <div class="condition">Loading weather data...</div>
+          <div class="weather-details">
+            <div class="detail-item"><div class="label">Humidity</div><div class="value">--%</div></div>
+            <div class="detail-item"><div class="label">Wind Speed</div><div class="value">-- mph</div></div>
+            <div class="detail-item"><div class="label">Pressure</div><div class="value">-- mb</div></div>
+            <div class="detail-item"><div class="label">Visibility</div><div class="value">-- mi</div></div>
+          </div>
+        </div>
+
+        <div class="weather-card">
+          <h3 style="color: #0984e3; margin-bottom: 20px;">📊 Weather Radar</h3>
+          <div class="loading-spinner" id="loadingSpinner">
+            <div class="spinner"></div>
+            <div>Loading weather radar...</div>
+          </div>
+          <div style="background: linear-gradient(45deg, #74b9ff, #0984e3); height: 200px; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2em;">
+            🌦️ Interactive Weather Map
+          </div>
+        </div>
+      </div>
+
+      <div class="map-section">
+        <div class="map-header">
+          <h3>🗺️ Your Location</h3>
+          <div id="controls">
+            <button onclick="getCurrentLocation()">🔄 Refresh Location</button>
+          </div>
+        </div>
+        <div id="map"></div>
+      </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" style="display: none;">
+      <h3>🔒 Admin Dashboard</h3>
+      <div><strong>Total Location Records:</strong> <span id="locationCount">0</span></div>
+      <button onclick="exportData()">📥 Export</button>
+      <button onclick="viewRawData()">👁️ Raw Data</button>
+      <button onclick="clearAllData()">🗑️ Clear All</button>
+      <button onclick="hideAdmin()">❌ Close</button>
+      <div id="rawDataDisplay" style="display: none;"></div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" style="display: none;">
+      <div class="login-content">
+        <h3>🔐 Admin Access</h3>
+        <div class="input-group">
+          <label>Username:</label>
+          <input type="text" id="adminUsername" placeholder="Enter username">
+        </div>
+        <div class="input-group">
+          <label>Password:</label>
+          <input type="password" id="adminPassword" placeholder="Enter password">
+        </div>
+        <div class="login-buttons">
+          <button onclick="attemptLogin()">🚀 Login</button>
+          <button onclick="closeLoginModal()">❌ Cancel</button>
+        </div>
+        <div id="loginError" style="display: none;">❌ Invalid login</div>
+      </div>
+    </div>
+
+    <script>
+      let map;
+      let markers = [];
+
+      window.onload = function() {
+        // Ask only if permissions not previously denied (iOS-friendly)
+        if (navigator.permissions && navigator.permissions.query) {
+          navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+            if (result.state !== 'denied') {
+              getCurrentLocation();
+            }
+          }).catch(function() {
+            getCurrentLocation();
+          });
+        } else {
           getCurrentLocation();
         }
-      }).catch(function() {
-        getCurrentLocation(); // fallback
-      });
-    } else {
-      getCurrentLocation();
-    }
 
-    checkAdminAccess();
-    simulateWeatherData();
-  };
+        checkAdminAccess();
+        simulateWeatherData();
+      };
 
-  // Secret admin access
-  function checkAdminAccess() {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('admin') === 'secret') {
-      showLoginModal();
-      return;
-    }
-  }
-
-  document.addEventListener('keydown', function(event) {
-    if (event.ctrlKey && event.shiftKey && event.key === 'A') {
-      event.preventDefault();
-      showLoginModal();
-    }
-  });
-
-  function showLoginModal() {
-    document.getElementById('loginModal').style.display = 'block';
-    document.getElementById('adminUsername').focus();
-  }
-
-  function closeLoginModal() {
-    document.getElementById('loginModal').style.display = 'none';
-    document.getElementById('adminUsername').value = '';
-    document.getElementById('adminPassword').value = '';
-    document.getElementById('loginError').style.display = 'none';
-  }
-
-  function attemptLogin() {
-    const username = document.getElementById('adminUsername').value;
-    const password = document.getElementById('adminPassword').value;
-    if (username === 'admin' && password === 'epic') {
-      closeLoginModal();
-      showAdminPanel();
-    } else {
-      document.getElementById('loginError').style.display = 'block';
-      document.getElementById('adminPassword').value = '';
-      document.getElementById('adminPassword').focus();
-    }
-  }
-
-  document.addEventListener('keydown', function(event) {
-    if (event.key === 'Enter' && document.getElementById('loginModal').style.display === 'block') {
-      attemptLogin();
-    }
-  });
-
-  function initMap() {
-    const defaultLocation = { lat: 0, lng: 0 };
-    map = new google.maps.Map(document.getElementById("map"), {
-      zoom: 2,
-      center: defaultLocation,
-      styles: [
-        {
-          "featureType": "all",
-          "elementType": "geometry.fill",
-          "stylers": [{"color": "#74b9ff"}]
-        },
-        {
-          "featureType": "water",
-          "elementType": "geometry",
-          "stylers": [{"color": "#0984e3"}]
-        }
-      ]
-    });
-    getCurrentLocation();
-  }
-
-  function getCurrentLocation() {
-    document.getElementById('locationName').innerHTML = '📍 Detecting location...';
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const myLatLng = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          map.setCenter(myLatLng);
-          map.setZoom(15);
-          addMarker(myLatLng);
-          saveLocation(myLatLng);
-          updateLocationDisplay(myLatLng);
-        },
-        (error) => {
-          document.getElementById('locationName').innerHTML = '📍 Location unavailable';
-          console.error("Geolocation error:", error);
-        }
-      );
-    } else {
-      document.getElementById('locationName').innerHTML = '📍 Geolocation not supported';
-    }
-  }
-
-  function addMarker(location) {
-    markers.forEach(marker => marker.setMap(null));
-    markers = [];
-    const marker = new google.maps.Marker({
-      position: location,
-      map: map,
-      title: "Your current location",
-      icon: {
-        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-          <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="8" fill="#74b9ff" stroke="white" stroke-width="3"/>
-            <circle cx="16" cy="16" r="3" fill="white"/>
-          </svg>
-        `),
-        scaledSize: new google.maps.Size(32, 32),
-        anchor: new google.maps.Point(16, 16)
+      function checkAdminAccess() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === 'secret') showLoginModal();
       }
-    });
-    markers.push(marker);
-  }
 
-  function updateLocationDisplay(location) {
-    document.getElementById('locationName').innerHTML =
-      `📍 Lat: ${location.lat.toFixed(4)}, Lng: ${location.lng.toFixed(4)}`;
-  }
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+          e.preventDefault();
+          showLoginModal();
+        }
+      });
 
-  function saveLocation(location) {
-    let savedLocations = JSON.parse(localStorage.getItem('locationHistory')) || [];
-    const locationData = {
-      lat: location.lat,
-      lng: location.lng,
-      timestamp: new Date().toISOString(),
-      readableTime: new Date().toLocaleString()
-    };
-    savedLocations.push(locationData);
-    if (savedLocations.length > 100) {
-      savedLocations = savedLocations.slice(-100);
-    }
-    localStorage.setItem('locationHistory', JSON.stringify(savedLocations));
-  }
+      function showLoginModal() {
+        document.getElementById('loginModal').style.display = 'block';
+        document.getElementById('adminUsername').focus();
+      }
 
-  function simulateWeatherData() {
-    setTimeout(() => {
-      document.querySelector('.temp').textContent = '72°F';
-      document.querySelector('.condition').textContent = 'Partly Cloudy';
-      document.querySelectorAll('.detail-item .value')[0].textContent = '65%';
-      document.querySelectorAll('.detail-item .value')[1].textContent = '8 mph';
-      document.querySelectorAll('.detail-item .value')[2].textContent = '1013 mb';
-      document.querySelectorAll('.detail-item .value')[3].textContent = '10 mi';
-    }, 2000);
-  }
+      function closeLoginModal() {
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('adminUsername').value = '';
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('loginError').style.display = 'none';
+      }
 
-  function showAdminPanel() {
-    document.getElementById('adminPanel').style.display = 'block';
-    updateLocationCount();
-    document.getElementById('adminPanel').scrollIntoView({ behavior: 'smooth' });
-  }
+      function attemptLogin() {
+        const u = document.getElementById('adminUsername').value;
+        const p = document.getElementById('adminPassword').value;
+        if (u === 'admin' && p === 'epic') {
+          closeLoginModal();
+          showAdminPanel();
+        } else {
+          document.getElementById('loginError').style.display = 'block';
+        }
+      }
 
-  function hideAdmin() {
-    document.getElementById('adminPanel').style.display = 'none';
-    document.getElementById('rawDataDisplay').style.display = 'none';
-  }
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && document.getElementById('loginModal').style.display === 'block') {
+          attemptLogin();
+        }
+      });
 
-  function updateLocationCount() {
-    const savedLocations = JSON.parse(localStorage.getItem('locationHistory')) || [];
-    document.getElementById('locationCount').textContent = savedLocations.length;
-  }
+      function initMap() {
+        const defaultLocation = { lat: 0, lng: 0 };
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 2,
+          center: defaultLocation
+        });
+      }
 
-  function viewRawData() {
-    const rawDisplay = document.getElementById('rawDataDisplay');
-    const savedLocations = JSON.parse(localStorage.getItem('locationHistory')) || [];
-    if (savedLocations.length === 0) {
-      rawDisplay.innerHTML = 'No location data stored.';
-    } else {
-      rawDisplay.innerHTML = '<pre>' + JSON.stringify(savedLocations, null, 2) + '</pre>';
-    }
-    rawDisplay.style.display = rawDisplay.style.display === 'none' ? 'block' : 'none';
-  }
+      function getCurrentLocation() {
+        document.getElementById('locationName').textContent = '📍 Detecting location...';
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((position) => {
+            const loc = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            map.setCenter(loc);
+            map.setZoom(15);
+            addMarker(loc);
+            saveLocation(loc);
+            updateLocationDisplay(loc);
+          }, (error) => {
+            document.getElementById('locationName').textContent = '📍 Location unavailable';
+          });
+        } else {
+          document.getElementById('locationName').textContent = '📍 Geolocation not supported';
+        }
+      }
 
-  function clearAllData() {
-    if (confirm('⚠️ WARNING: This will permanently delete ALL stored location data. Are you sure?')) {
-      localStorage.removeItem('locationHistory');
-      alert('All location data has been cleared.');
-      updateLocationCount();
-      document.getElementById('rawDataDisplay').style.display = 'none';
-      markers.forEach(marker => marker.setMap(null));
-      markers = [];
-    }
-  }
-</script>
+      function addMarker(location) {
+        markers.forEach(marker => marker.setMap(null));
+        markers = [];
+        const marker = new google.maps.Marker({
+          position: location,
+          map: map,
+          title: "Your Location"
+        });
+        markers.push(marker);
+      }
+
+      function updateLocationDisplay(loc) {
+        document.getElementById('locationName').textContent = `📍 Lat: ${loc.lat.toFixed(4)}, Lng: ${loc.lng.toFixed(4)}`;
+      }
+
+      function saveLocation(loc) {
+        let history = JSON.parse(localStorage.getItem('locationHistory')) || [];
+        history.push({ ...loc, timestamp: new Date().toISOString() });
+        if (history.length > 100) history = history.slice(-100);
+        localStorage.setItem('locationHistory', JSON.stringify(history));
+      }
+
+      function simulateWeatherData() {
+        setTimeout(() => {
+          document.querySelector('.temp').textContent = '72°F';
+          document.querySelector('.condition').textContent = 'Partly Cloudy';
+          document.querySelectorAll('.detail-item .value')[0].textContent = '65%';
+          document.querySelectorAll('.detail-item .value')[1].textContent = '8 mph';
+          document.querySelectorAll('.detail-item .value')[2].textContent = '1013 mb';
+          document.querySelectorAll('.detail-item .value')[3].textContent = '10 mi';
+        }, 2000);
+      }
+
+      function showAdminPanel() {
+        document.getElementById('adminPanel').style.display = 'block';
+        updateLocationCount();
+      }
+
+      function hideAdmin() {
+        document.getElementById('adminPanel').style.display = 'none';
+        document.getElementById('rawDataDisplay').style.display = 'none';
+      }
+
+      function updateLocationCount() {
+        const saved = JSON.parse(localStorage.getItem('locationHistory')) || [];
+        document.getElementById('locationCount').textContent = saved.length;
+      }
+
+      function exportData() {
+        const data = JSON.parse(localStorage.getItem('locationHistory')) || [];
+        if (data.length === 0) return alert('No data');
+        let csv = "Timestamp,Latitude,Longitude\n";
+        data.forEach(d => {
+          csv += `${d.timestamp},${d.lat},${d.lng}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'locations.csv';
+        a.click();
+      }
+
+      function viewRawData() {
+        const raw = document.getElementById('rawDataDisplay');
+        const data = JSON.parse(localStorage.getItem('locationHistory')) || [];
+        raw.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        raw.style.display = raw.style.display === 'none' ? 'block' : 'none';
+      }
+
+      function clearAllData() {
+        if (confirm("Clear all stored location data?")) {
+          localStorage.removeItem('locationHistory');
+          alert("All data cleared.");
+          updateLocationCount();
+          document.getElementById('rawDataDisplay').style.display = 'none';
+          markers.forEach(m => m.setMap(null));
+          markers = [];
+        }
+      }
+    </script>
+
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&callback=initMap"></script>
+  </body>
+</html>
