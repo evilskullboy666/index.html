@@ -201,57 +201,99 @@ function displayWeather(data) {
 function showMap(lat, lon, locationName = 'Location') {
   const mapContainer = document.getElementById("map");
   
-  // Create an interactive map using Leaflet (OpenStreetMap)
-  mapContainer.innerHTML = `
-    <div id="leafletMap" style="width: 100%; height: 100%;"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  `;
+  // Create a custom visual map representation
+  const accuracy = window.currentAccuracy || 100;
+  const zoomLevel = Math.max(8, Math.min(16, 20 - Math.log10(accuracy)));
   
-  // Wait for Leaflet to load then initialize map
-  setTimeout(() => {
-    if (typeof L !== 'undefined') {
-      const map = L.map('leafletMap').setView([lat, lon], 13);
+  mapContainer.innerHTML = `
+    <div style="position: relative; width: 100%; height: 100%; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%); border-radius: 10px; overflow: hidden;">
+      <!-- Map Header -->
+      <div style="position: absolute; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: white; padding: 15px; text-align: center; z-index: 10;">
+        <h3 style="margin: 0; font-size: 18px;">📍 ${locationName}</h3>
+        <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.8;">Live Location Map</p>
+      </div>
       
-      // Add OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
+      <!-- Map Grid Background -->
+      <div style="position: absolute; inset: 0; opacity: 0.1; background-image: 
+        linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+        background-size: 20px 20px;"></div>
       
-      // Add marker for the location
-      const marker = L.marker([lat, lon]).addTo(map);
-      marker.bindPopup(`
-        <div style="text-align: center;">
-          <strong>${locationName}</strong><br>
-          Lat: ${lat.toFixed(4)}<br>
-          Lon: ${lon.toFixed(4)}
-        </div>
-      `).openPopup();
+      <!-- Accuracy Circle -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+        width: ${Math.min(200, accuracy/2)}px; height: ${Math.min(200, accuracy/2)}px; 
+        border: 2px solid rgba(59, 130, 246, 0.6); 
+        border-radius: 50%; 
+        background: rgba(59, 130, 246, 0.1);
+        animation: pulse 2s infinite;">
+      </div>
       
-      // Add accuracy circle if available
-      if (window.currentAccuracy) {
-        L.circle([lat, lon], {
-          radius: window.currentAccuracy,
-          color: '#3b82f6',
-          fillColor: '#3b82f6',
-          fillOpacity: 0.1,
-          weight: 2
-        }).addTo(map);
-      }
-    } else {
-      // Fallback if Leaflet fails to load
-      mapContainer.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; flex-direction: column;">
-          <div style="padding: 20px; text-align: center;">
-            <h3>📍 ${locationName}</h3>
-            <p>Latitude: ${lat.toFixed(6)}</p>
-            <p>Longitude: ${lon.toFixed(6)}</p>
-            <p style="font-size: 12px; margin-top: 20px;">Interactive map loading...</p>
+      <!-- Location Marker -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+        width: 20px; height: 20px; 
+        background: #ef4444; 
+        border: 3px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+        animation: bounce 1s infinite;">
+      </div>
+      
+      <!-- Coordinates Display -->
+      <div style="position: absolute; bottom: 15px; left: 15px; right: 15px; 
+        background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 8px; 
+        font-family: monospace; font-size: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <strong>Latitude:</strong><br>
+            ${lat.toFixed(6)}°
+          </div>
+          <div>
+            <strong>Longitude:</strong><br>
+            ${lon.toFixed(6)}°
           </div>
         </div>
-      `;
-    }
-  }, 500);
+        <div style="margin-top: 10px; text-align: center; opacity: 0.7;">
+          GPS Accuracy: ±${Math.round(accuracy)}m | Zoom Level: ${Math.round(zoomLevel)}
+        </div>
+        <div style="margin-top: 5px; text-align: center; font-size: 11px; opacity: 0.5;">
+          ${new Date().toLocaleString()}
+        </div>
+      </div>
+      
+      <!-- Compass -->
+      <div style="position: absolute; top: 70px; right: 15px; 
+        width: 60px; height: 60px; 
+        background: rgba(0,0,0,0.7); 
+        border: 2px solid rgba(255,255,255,0.3); 
+        border-radius: 50%; 
+        display: flex; align-items: center; justify-content: center; 
+        color: white; font-size: 20px;">
+        🧭
+      </div>
+      
+      <!-- Scale Bar -->
+      <div style="position: absolute; bottom: 70px; right: 15px; 
+        background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; 
+        border-radius: 4px; font-size: 11px;">
+        <div style="border-top: 2px solid white; width: 50px; margin-bottom: 2px;"></div>
+        ${accuracy < 100 ? '50m' : accuracy < 500 ? '200m' : '1km'}
+      </div>
+    </div>
+    
+    <style>
+      @keyframes pulse {
+        0% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+        50% { opacity: 0.3; transform: translate(-50%, -50%) scale(1.1); }
+        100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+      }
+      
+      @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translate(-50%, -50%) scale(1); }
+        40% { transform: translate(-50%, -50%) scale(1.1); }
+        60% { transform: translate(-50%, -50%) scale(1.05); }
+      }
+    </style>
+  `;
 }
 
 function logVisitor(lat, lon, accuracy, timestamp) {
