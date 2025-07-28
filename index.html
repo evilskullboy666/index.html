@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,9 +57,12 @@
       background: #1e293b;
       padding: 20px;
       border-radius: 10px;
-      display: inline-block;
+      display: none;
       text-align: left;
       box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     #map {
@@ -83,52 +85,92 @@
       white-space: pre-wrap;
       word-wrap: break-word;
     }
+
+    #loginModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    #adminPanel {
+      display: none;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 1000;
+      color: #fff;
+      max-width: 400px;
+      font-size: 14px;
+    }
+
+    #rawDataDisplay {
+      margin-top: 15px;
+      display: none;
+    }
+
+    #cookieVisitorInfo {
+      margin-top: 15px;
+      background: rgba(255,255,255,0.05);
+      padding: 15px;
+      border-radius: 10px;
+      font-family: monospace;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🌤️ WeatherScope</h1>
-    <p>Check the current weather and location info</p>
-  </header>
 
-  <div id="weatherContainer">
-    <input type="text" id="locationInput" placeholder="Enter city or zip code">
-    <button id="getWeatherBtn">Get Weather</button>
-    <button onclick="detectLocation()">📍 Use My Location</button>
-    <div id="weatherResult" style="display: none;"></div>
-    <div id="map"></div>
+<header>
+  <h1>🌤️ WeatherScope</h1>
+  <p>Check the current weather and log your location info</p>
+</header>
+
+<div id="weatherContainer">
+  <input type="text" id="locationInput" placeholder="Enter city or zip code">
+  <button id="getWeatherBtn">Get Weather</button>
+  <button onclick="detectLocation()">📍 Use My Location</button>
+  <div id="weatherResult"></div>
+  <div id="map"></div>
+</div>
+
+<!-- Hidden Admin Login Modal -->
+<div id="loginModal">
+  <div style="background: #1f2933; padding: 30px; border-radius: 10px; text-align: center; width: 300px;">
+    <h3>🔐 Admin Login</h3>
+    <input type="text" id="adminUser" placeholder="Username" style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+    <input type="password" id="adminPass" placeholder="Password" style="width: 100%; padding: 8px; margin-bottom: 15px;"><br>
+    <button onclick="loginAdmin()">Login</button>
+    <p id="loginError" style="color: red; font-size: 12px; display: none;">Invalid credentials</p>
   </div>
+</div>
 
-  <!-- Hidden Admin Login Modal -->
-  <div id="loginModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 9999;">
-    <div style="background: #1f2933; padding: 30px; border-radius: 10px; text-align: center; width: 300px;">
-      <h3>🔐 Admin Login</h3>
-      <input type="text" id="adminUser" placeholder="Username" style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
-      <input type="password" id="adminPass" placeholder="Password" style="width: 100%; padding: 8px; margin-bottom: 15px;"><br>
-      <button onclick="loginAdmin()">Login</button>
-      <p id="loginError" style="color: red; font-size: 12px; display: none;">Invalid credentials</p>
-    </div>
+<!-- Admin Panel -->
+<div id="adminPanel">
+  <h3>🔒 Admin Dashboard</h3>
+  <div><strong>Total Location Records:</strong> <span id="locationCount">0</span></div>
+  <div>
+    <button onclick="exportData()">📥 Export All Data</button>
+    <button onclick="viewRawData()">👁️ View Raw Data</button>
+    <button onclick="clearAllData()">🗑️ Clear All Data</button>
+    <button onclick="hideAdmin()">❌ Hide Panel</button>
   </div>
+  <div id="rawDataDisplay"></div>
+  <div id="cookieVisitorInfo"></div>
+</div>
 
-  <!-- Admin Panel -->
-  <div id="adminPanel" style="display: none; position: fixed; top: 20px; right: 20px; background: #1e293b; padding: 20px; border-radius: 10px; z-index: 1000; color: #fff; max-width: 400px;">
-    <h3>🔒 Admin Dashboard</h3>
-    <div style="margin: 10px 0;"><strong>Total Location Records:</strong> <span id="locationCount">0</span></div>
-    <div>
-      <button onclick="exportData()">📥 Export All Data</button>
-      <button onclick="viewRawData()">👁️ View Raw Data</button>
-      <button onclick="clearAllData()">🗑️ Clear All Data</button>
-      <button onclick="hideAdmin()">❌ Hide Panel</button>
-    </div>
-    <div id="rawDataDisplay" style="margin-top: 15px; display: none;"></div>
-    <div id="cookieVisitorInfo" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px;"></div>
-  </div>
+<footer>
+  WeatherScope © 2025 — Powered by OpenWeather & Google Maps
+</footer>
 
-  <footer>
-    WeatherScope © 2025 — Powered by OpenWeather & Google Maps
-  </footer>
-
- <script>
+<script>
   function detectLocation() {
     getLocation("manual");
   }
@@ -166,16 +208,128 @@
   });
 
   function fetchWeatherByCity(city) {
-    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+  }
 
-<!-- Google Maps API with Geocoding enabled -->
+  function fetchWeatherByCoords(lat, lon) {
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+  }
+
+  function fetchWeather(url) {
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.cod !== 200) return alert("Location not found.");
+        document.getElementById("weatherResult").innerHTML = `
+          <h2>${data.name}, ${data.sys.country}</h2>
+          <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
+          <p><strong>Weather:</strong> ${data.weather[0].main}</p>
+          <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
+        `;
+        document.getElementById("weatherResult").style.display = "block";
+        initMap(data.coord.lat, data.coord.lon);
+      });
+  }
+
+  function initMap(lat = 0, lon = 0) {
+    const map = new google.maps.Map(document.getElementById("map"), {
+      center: { lat, lng: lon },
+      zoom: 8,
+    });
+    new google.maps.Marker({ position: { lat, lng: lon }, map });
+  }
+
+  function enrichAndLogVisitor(lat, lon, accuracy, timestamp) {
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
+      const address = (status === "OK" && results[0]) ? results[0].formatted_address : "Unavailable";
+      const log = {
+        timestamp,
+        lat,
+        lon,
+        accuracy: `${accuracy} meters`,
+        address,
+        userAgent: navigator.userAgent,
+        screenResolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: navigator.platform
+      };
+      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+      logs.push(log);
+      localStorage.setItem("visitorLogs", JSON.stringify(logs));
+      updateLocationCount();
+    });
+  }
+
+  function updateLocationCount() {
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+    document.getElementById("locationCount").innerText = logs.length;
+  }
+
+  function loginAdmin() {
+    const user = document.getElementById("adminUser").value;
+    const pass = document.getElementById("adminPass").value;
+    if (user === "admin" && pass === "admin123") {
+      document.getElementById("loginModal").style.display = "none";
+      document.getElementById("adminPanel").style.display = "block";
+      updateLocationCount();
+      viewRawData();
+    } else {
+      document.getElementById("loginError").style.display = "block";
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+      document.getElementById("loginModal").style.display = "flex";
+    }
+  });
+
+  function exportData() {
+    const logs = localStorage.getItem("visitorLogs") || "[]";
+    const blob = new Blob([logs], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "visitorLogs.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function viewRawData() {
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+
+    if (!Array.isArray(logs) || logs.length === 0) {
+      document.getElementById("rawDataDisplay").style.display = "block";
+      document.getElementById("rawDataDisplay").innerHTML = `<pre>No visitor logs found.</pre>`;
+      return;
+    }
+
+    const formatted = logs.map((entry, i) => {
+      return `#${i + 1}
+Timestamp: ${entry.timestamp}
+Address: ${entry.address}
+Coordinates: ${entry.lat}, ${entry.lon} (±${entry.accuracy})
+User Agent: ${entry.userAgent}
+Platform: ${entry.platform}
+Screen: ${entry.screenResolution}
+Timezone: ${entry.timezone}`;
+    }).join('\n\n');
+
+    document.getElementById("rawDataDisplay").style.display = "block";
+    document.getElementById("rawDataDisplay").innerHTML = `<pre>${formatted}</pre>`;
+  }
+
+  function clearAllData() {
+    localStorage.removeItem("visitorLogs");
+    document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
+    updateLocationCount();
+  }
+
+  function hideAdmin() {
+    document.getElementById("adminPanel").style.display = "none";
+  }
+</script>
+
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&libraries=places&callback=initMap"></script>
 
-
-<!-- Google Maps JS API (Geocoder used here) -->
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&libraries=places&callback=initMap"></script>
-
-
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&callback=initMap"></script>
-</body>
-</html>
