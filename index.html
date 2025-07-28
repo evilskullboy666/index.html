@@ -128,7 +128,7 @@
     WeatherScope © 2025 — Powered by OpenWeather & Google Maps
   </footer>
 
-  <script>
+ <script>
   // Auto + Manual Location Request
   function detectLocation() {
     getLocation("manual");
@@ -146,8 +146,8 @@
         pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
-          logVisitorLocation(lat, lon);
           fetchWeatherByCoords(lat, lon);
+          logVisitorLocation(lat, lon); // Includes reverse geocoding
         },
         err => {
           if (source === "manual") {
@@ -197,11 +197,22 @@
   }
 
   function logVisitorLocation(lat, lon) {
-    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+    const geocoder = new google.maps.Geocoder();
     const timestamp = new Date().toISOString();
-    logs[timestamp] = { lat, lon };
-    localStorage.setItem("visitorLogs", JSON.stringify(logs));
-    updateLocationCount();
+
+    geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
+      let address = "Unavailable";
+      if (status === "OK" && results[0]) {
+        address = results[0].formatted_address;
+      } else {
+        console.error("Geocoding failed:", status);
+      }
+
+      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+      logs[timestamp] = { lat, lon, address };
+      localStorage.setItem("visitorLogs", JSON.stringify(logs));
+      updateLocationCount();
+    });
   }
 
   function updateLocationCount() {
@@ -240,8 +251,11 @@
 
   function viewRawData() {
     const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+    const formatted = Object.entries(logs).map(([time, entry]) => {
+      return `${time}:\n  Address: ${entry.address}\n  Lat: ${entry.lat}, Lon: ${entry.lon}`;
+    }).join('\n\n');
     document.getElementById("rawDataDisplay").style.display = "block";
-    document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
+    document.getElementById("rawDataDisplay").innerHTML = `<pre>${formatted}</pre>`;
   }
 
   function clearAllData() {
@@ -254,6 +268,9 @@
     document.getElementById("adminPanel").style.display = "none";
   }
 </script>
+
+<!-- Google Maps JS API (Geocoder used here) -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&libraries=places&callback=initMap"></script>
 
 
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&callback=initMap"></script>
