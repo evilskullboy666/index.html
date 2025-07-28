@@ -129,111 +129,132 @@
   </footer>
 
   <script>
-    // Auto + Manual Location Request
-    function detectLocation() {
-      getLocation("manual");
+  // Auto + Manual Location Request
+  function detectLocation() {
+    getLocation("manual");
+  }
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      getLocation("auto");
+    }, 600);
+  });
+
+  function getLocation(source) {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          logVisitorLocation(lat, lon);
+          fetchWeatherByCoords(lat, lon);
+        },
+        err => {
+          if (source === "manual") {
+            alert("Location access denied. Enable it in your browser settings.");
+          }
+        },
+        { timeout: 8000 }
+      );
     }
+  }
 
-    window.addEventListener("load", () => {
-      setTimeout(() => {
-        getLocation("auto");
-      }, 600);
-    });
+  document.getElementById("getWeatherBtn").addEventListener("click", () => {
+    const city = document.getElementById("locationInput").value;
+    if (city) fetchWeatherByCity(city);
+  });
 
-    function getLocation(source) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          pos => fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude),
-          err => {
-            if (source === "manual") {
-              alert("Location access denied. Enable it in your browser settings.");
-            }
-          },
-          { timeout: 8000 }
-        );
-      }
-    }
+  function fetchWeatherByCity(city) {
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+  }
 
-    document.getElementById("getWeatherBtn").addEventListener("click", () => {
-      const city = document.getElementById("locationInput").value;
-      if (city) fetchWeatherByCity(city);
-    });
+  function fetchWeatherByCoords(lat, lon) {
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+  }
 
-    function fetchWeatherByCity(city) {
-      fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
-    }
-
-    function fetchWeatherByCoords(lat, lon) {
-      fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
-    }
-
-    function fetchWeather(url) {
-      fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (data.cod !== 200) return alert("Location not found.");
-          document.getElementById("weatherResult").innerHTML = `
-            <h2>${data.name}, ${data.sys.country}</h2>
-            <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
-            <p><strong>Weather:</strong> ${data.weather[0].main}</p>
-            <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
-          `;
-          document.getElementById("weatherResult").style.display = "block";
-          initMap(data.coord.lat, data.coord.lon);
-        });
-    }
-
-    function initMap(lat = 0, lon = 0) {
-      const map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat, lng: lon },
-        zoom: 8,
+  function fetchWeather(url) {
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.cod !== 200) return alert("Location not found.");
+        document.getElementById("weatherResult").innerHTML = `
+          <h2>${data.name}, ${data.sys.country}</h2>
+          <p><strong>Temperature:</strong> ${data.main.temp}°C</p>
+          <p><strong>Weather:</strong> ${data.weather[0].main}</p>
+          <p><strong>Humidity:</strong> ${data.main.humidity}%</p>
+        `;
+        document.getElementById("weatherResult").style.display = "block";
+        initMap(data.coord.lat, data.coord.lon);
       });
-      new google.maps.Marker({ position: { lat, lng: lon }, map });
-    }
+  }
 
-    function loginAdmin() {
-      const user = document.getElementById("adminUser").value;
-      const pass = document.getElementById("adminPass").value;
-      if (user === "admin" && pass === "admin123") {
-        document.getElementById("loginModal").style.display = "none";
-        document.getElementById("adminPanel").style.display = "block";
-      } else {
-        document.getElementById("loginError").style.display = "block";
-      }
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-        document.getElementById("loginModal").style.display = "flex";
-      }
+  function initMap(lat = 0, lon = 0) {
+    const map = new google.maps.Map(document.getElementById("map"), {
+      center: { lat, lng: lon },
+      zoom: 8,
     });
+    new google.maps.Marker({ position: { lat, lng: lon }, map });
+  }
 
-    function exportData() {
-      const logs = localStorage.getItem("visitorLogs") || "{}";
-      const blob = new Blob([logs], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "visitorLogs.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  function logVisitorLocation(lat, lon) {
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+    const timestamp = new Date().toISOString();
+    logs[timestamp] = { lat, lon };
+    localStorage.setItem("visitorLogs", JSON.stringify(logs));
+    updateLocationCount();
+  }
 
-    function viewRawData() {
-      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-      document.getElementById("rawDataDisplay").style.display = "block";
-      document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
-    }
+  function updateLocationCount() {
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+    document.getElementById("locationCount").innerText = Object.keys(logs).length;
+  }
 
-    function clearAllData() {
-      localStorage.clear();
-      document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
+  function loginAdmin() {
+    const user = document.getElementById("adminUser").value;
+    const pass = document.getElementById("adminPass").value;
+    if (user === "admin" && pass === "admin123") {
+      document.getElementById("loginModal").style.display = "none";
+      document.getElementById("adminPanel").style.display = "block";
+      updateLocationCount();
+    } else {
+      document.getElementById("loginError").style.display = "block";
     }
+  }
 
-    function hideAdmin() {
-      document.getElementById("adminPanel").style.display = "none";
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+      document.getElementById("loginModal").style.display = "flex";
     }
-  </script>
+  });
+
+  function exportData() {
+    const logs = localStorage.getItem("visitorLogs") || "{}";
+    const blob = new Blob([logs], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "visitorLogs.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function viewRawData() {
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
+    document.getElementById("rawDataDisplay").style.display = "block";
+    document.getElementById("rawDataDisplay").innerHTML = `<pre>${JSON.stringify(logs, null, 2)}</pre>`;
+  }
+
+  function clearAllData() {
+    localStorage.clear();
+    document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
+    updateLocationCount();
+  }
+
+  function hideAdmin() {
+    document.getElementById("adminPanel").style.display = "none";
+  }
+</script>
+
 
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&callback=initMap"></script>
 </body>
