@@ -129,7 +129,6 @@
   </footer>
 
  <script>
-  // Auto + Manual Location Request
   function detectLocation() {
     getLocation("manual");
   }
@@ -146,15 +145,17 @@
         pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
+          const accuracy = pos.coords.accuracy;
+          const timestamp = new Date().toISOString();
           fetchWeatherByCoords(lat, lon);
-          logVisitorLocation(lat, lon); // Includes reverse geocoding
+          enrichAndLogVisitor(lat, lon, accuracy, timestamp);
         },
         err => {
           if (source === "manual") {
             alert("Location access denied. Enable it in your browser settings.");
           }
         },
-        { timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     }
   }
@@ -165,11 +166,11 @@
   });
 
   function fetchWeatherByCity(city) {
-    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=ab4210ebf7ec87e064c80a69733ca1c3`);
   }
 
   function fetchWeatherByCoords(lat, lon) {
-    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=YOUR_OPENWEATHER_API_KEY`);
+    fetchWeather(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=ab4210ebf7ec87e064c80a69733ca1c3`);
   }
 
   function fetchWeather(url) {
@@ -196,28 +197,33 @@
     new google.maps.Marker({ position: { lat, lng: lon }, map });
   }
 
-  function logVisitorLocation(lat, lon) {
+  function enrichAndLogVisitor(lat, lon, accuracy, timestamp) {
     const geocoder = new google.maps.Geocoder();
-    const timestamp = new Date().toISOString();
-
     geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
-      let address = "Unavailable";
-      if (status === "OK" && results[0]) {
-        address = results[0].formatted_address;
-      } else {
-        console.error("Geocoding failed:", status);
-      }
+      const address = (status === "OK" && results[0]) ? results[0].formatted_address : "Unavailable";
 
-      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-      logs[timestamp] = { lat, lon, address };
+      const log = {
+        timestamp,
+        lat,
+        lon,
+        accuracy: `${accuracy} meters`,
+        address,
+        userAgent: navigator.userAgent,
+        screenResolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: navigator.platform
+      };
+
+      const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+      logs.push(log);
       localStorage.setItem("visitorLogs", JSON.stringify(logs));
       updateLocationCount();
     });
   }
 
   function updateLocationCount() {
-    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-    document.getElementById("locationCount").innerText = Object.keys(logs).length;
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+    document.getElementById("locationCount").innerText = logs.length;
   }
 
   function loginAdmin() {
@@ -239,7 +245,7 @@
   });
 
   function exportData() {
-    const logs = localStorage.getItem("visitorLogs") || "{}";
+    const logs = localStorage.getItem("visitorLogs") || "[]";
     const blob = new Blob([logs], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -250,16 +256,22 @@
   }
 
   function viewRawData() {
-    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "{}");
-    const formatted = Object.entries(logs).map(([time, entry]) => {
-      return `${time}:\n  Address: ${entry.address}\n  Lat: ${entry.lat}, Lon: ${entry.lon}`;
+    const logs = JSON.parse(localStorage.getItem("visitorLogs") || "[]");
+    const formatted = logs.map((entry, i) => {
+      return `#${i + 1} - ${entry.timestamp}
+Address: ${entry.address}
+Coords: ${entry.lat}, ${entry.lon} (±${entry.accuracy})
+Browser: ${entry.userAgent}
+Platform: ${entry.platform}
+Screen: ${entry.screenResolution}
+Timezone: ${entry.timezone}`;
     }).join('\n\n');
     document.getElementById("rawDataDisplay").style.display = "block";
     document.getElementById("rawDataDisplay").innerHTML = `<pre>${formatted}</pre>`;
   }
 
   function clearAllData() {
-    localStorage.clear();
+    localStorage.removeItem("visitorLogs");
     document.getElementById("rawDataDisplay").innerHTML = "All data cleared.";
     updateLocationCount();
   }
@@ -268,6 +280,10 @@
     document.getElementById("adminPanel").style.display = "none";
   }
 </script>
+
+<!-- Google Maps API with Geocoding enabled -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&libraries=places&callback=initMap"></script>
+
 
 <!-- Google Maps JS API (Geocoder used here) -->
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB_Wf43YItG5wLQ9uPXtjhGc7bfAa9B09w&libraries=places&callback=initMap"></script>
