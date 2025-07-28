@@ -14,7 +14,7 @@
     button { background: #3b82f6; color: white; cursor: pointer; }
     button:hover { background: #2563eb; }
     #weatherResult { display: none; margin-top: 20px; background: #1e293b; padding: 20px; border-radius: 10px; }
-    #map { width: 100%; height: 400px; margin-top: 30px; border-top: 1px solid #333; background: #2a3441; display: flex; align-items: center; justify-content: center; }
+    #map { width: 100%; height: 400px; margin-top: 30px; border-top: 1px solid #333; background: #2a3441; border-radius: 10px; overflow: hidden; }
     footer { text-align: center; padding: 20px; font-size: 12px; color: #999; border-top: 1px solid #2e3a4a; }
     #loginModal, #adminPanel { display: none; position: fixed; z-index: 1000; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
     #adminPanel { top: 20px; left: auto; right: 20px; background: #1e293b; width: 400px; height: auto; padding: 20px; border-radius: 10px; display: none; flex-direction: column; color: white; z-index: 1000; position: fixed; }
@@ -36,7 +36,7 @@
   <button onclick="detectLocation()">📍 Use My Location</button>
   <div id="message"></div>
   <div id="weatherResult"></div>
-  <div id="map">Map would appear here with valid API key</div>
+  <div id="map"></div>
 </div>
 
 <div id="loginModal">
@@ -89,9 +89,12 @@ function detectLocation() {
       const accuracy = pos.coords.accuracy;
       const timestamp = new Date().toISOString();
       
+      // Store accuracy globally for map display
+      window.currentAccuracy = accuracy;
+      
       logVisitor(lat, lon, accuracy, timestamp);
       fetchWeatherByCoords(lat, lon);
-      showMessage('Location detected successfully!', 'success');
+      showMessage(`Location detected! Accuracy: ±${Math.round(accuracy)}m`, 'success');
     },
     err => {
       let errorMsg = 'Location access denied.';
@@ -107,6 +110,9 @@ function detectLocation() {
           break;
       }
       showMessage(errorMsg, 'error');
+      
+      // Show default map view
+      showMap(40.7128, -74.0060, 'Default Location (NYC)');
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
@@ -124,18 +130,43 @@ function fetchByCity() {
   // Using a free weather API (OpenWeatherMap requires API key)
   // For demo purposes, we'll simulate weather data
   setTimeout(() => {
+    // Generate random coordinates for the city (approximate)
+    const cityCoords = getCityCoordinates(city);
+    
     const mockWeatherData = {
       name: city,
       country: 'Demo',
       weather: 'Clear',
       temp: Math.round(Math.random() * 30 + 5), // Random temp between 5-35°C
-      lat: Math.random() * 180 - 90,
-      lon: Math.random() * 360 - 180
+      lat: cityCoords.lat,
+      lon: cityCoords.lon
     };
     
     displayWeather(mockWeatherData);
     showMessage('Weather data loaded (demo data)', 'success');
   }, 1000);
+}
+
+// Simple function to get approximate coordinates for common cities
+function getCityCoordinates(city) {
+  const cityMap = {
+    'london': { lat: 51.5074, lon: -0.1278 },
+    'paris': { lat: 48.8566, lon: 2.3522 },
+    'tokyo': { lat: 35.6762, lon: 139.6503 },
+    'new york': { lat: 40.7128, lon: -74.0060 },
+    'sydney': { lat: -33.8688, lon: 151.2093 },
+    'berlin': { lat: 52.5200, lon: 13.4050 },
+    'rome': { lat: 41.9028, lon: 12.4964 },
+    'moscow': { lat: 55.7558, lon: 37.6176 },
+    'beijing': { lat: 39.9042, lon: 116.4074 },
+    'mumbai': { lat: 19.0760, lon: 72.8777 }
+  };
+  
+  const lowerCity = city.toLowerCase();
+  return cityMap[lowerCity] || {
+    lat: Math.random() * 180 - 90,
+    lon: Math.random() * 360 - 180
+  };
 }
 
 function fetchWeatherByCoords(lat, lon) {
@@ -163,15 +194,64 @@ function displayWeather(data) {
     <p>Coordinates: ${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}</p>
   `;
   
-  // Update map placeholder
-  document.getElementById("map").innerHTML = `
-    <div style="color: #999;">
-      <p>📍 Map View</p>
-      <p>Location: ${data.name}</p>
-      <p>Lat: ${data.lat.toFixed(4)}, Lon: ${data.lon.toFixed(4)}</p>
-      <p><small>Note: Real map requires valid API key</small></p>
-    </div>
+  // Display interactive map
+  showMap(data.lat, data.lon, data.name);
+}
+
+function showMap(lat, lon, locationName = 'Location') {
+  const mapContainer = document.getElementById("map");
+  
+  // Create an interactive map using Leaflet (OpenStreetMap)
+  mapContainer.innerHTML = `
+    <div id="leafletMap" style="width: 100%; height: 100%;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   `;
+  
+  // Wait for Leaflet to load then initialize map
+  setTimeout(() => {
+    if (typeof L !== 'undefined') {
+      const map = L.map('leafletMap').setView([lat, lon], 13);
+      
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+      
+      // Add marker for the location
+      const marker = L.marker([lat, lon]).addTo(map);
+      marker.bindPopup(`
+        <div style="text-align: center;">
+          <strong>${locationName}</strong><br>
+          Lat: ${lat.toFixed(4)}<br>
+          Lon: ${lon.toFixed(4)}
+        </div>
+      `).openPopup();
+      
+      // Add accuracy circle if available
+      if (window.currentAccuracy) {
+        L.circle([lat, lon], {
+          radius: window.currentAccuracy,
+          color: '#3b82f6',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.1,
+          weight: 2
+        }).addTo(map);
+      }
+    } else {
+      // Fallback if Leaflet fails to load
+      mapContainer.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; flex-direction: column;">
+          <div style="padding: 20px; text-align: center;">
+            <h3>📍 ${locationName}</h3>
+            <p>Latitude: ${lat.toFixed(6)}</p>
+            <p>Longitude: ${lon.toFixed(6)}</p>
+            <p style="font-size: 12px; margin-top: 20px;">Interactive map loading...</p>
+          </div>
+        </div>
+      `;
+    }
+  }, 500);
 }
 
 function logVisitor(lat, lon, accuracy, timestamp) {
